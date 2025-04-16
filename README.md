@@ -42,7 +42,7 @@ license: Apache License 2.0
 4. 运行
 
    ```bash
-   .venv/bin/python /Users/yuanxinyu/workspace/Mira/app.py
+   .venv/bin/python ./app.py
    ```
 
    浏览器中输入：`http://127.0.0.1:7860` 进入产品页面
