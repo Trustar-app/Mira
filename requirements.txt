@@ -1,0 +1,6 @@
+oss2
+gradio
+modelscope_studio
+openai
+soundfile
+python-dotenv

@@ -1,0 +1,10 @@
+.codemap/
+.vscode/
+.idea/
+.DS_Store
+
+.upload/*
+
+.venv/
+
+
