@@ -1,0 +1,1 @@
+SIMU_ASSIS_REPLY_PROMPT = "Ok, I have remembered your setting"

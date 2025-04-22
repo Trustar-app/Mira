@@ -39,12 +39,16 @@ license: Apache License 2.0
 
    API KEY 获取网站：`https://bailian.console.aliyun.com/?tab=model#/api-key`
 
-4. 运行
 
+4. 运行和调试 qwen-omni 的 agent
    ```bash
-   .venv/bin/python ./app.py
+   python run_omni.py
    ```
-
-   浏览器中输入：`http://127.0.0.1:7860` 进入产品页面
+     
+5. 运行前后端
+    ```bash
+   python launch.py
+   ```
+   前端界面并没有更新。。。
 
    

@@ -1,0 +1,9 @@
+[llm.omni]
+model = "qwen-omni-turbo"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = "sk-4be3f2729fbf48f7b91dec9f2415cbd7"
+max_tokens = 8192
+temperature = 0.0
+max_input_tokens = 8192
+must_stream = true
+
