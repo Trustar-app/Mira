@@ -2,6 +2,7 @@
 .vscode/
 .idea/
 .DS_Store
+tmp
 
 uploads/*
 
@@ -13,7 +14,7 @@ uploads/*
 logs/
 
 # Data
-data/
+#data/
 
 # Workspace
 workspace/

@@ -7,6 +7,8 @@ from app.agent.base import BaseAgent
 from app.llm import LLM
 from app.schema import AgentState, Memory
 
+from app.logger import logger
+
 
 class ReActAgent(BaseAgent, ABC):
     name: str
@@ -36,3 +38,4 @@ class ReActAgent(BaseAgent, ABC):
         if not should_act:
             return "Thinking complete - no action needed"
         return await self.act()
+

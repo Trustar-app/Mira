@@ -60,6 +60,29 @@ class Message(BaseModel):
     name: Optional[str] = Field(default=None)
     tool_call_id: Optional[str] = Field(default=None)
     base64_image: Optional[str] = Field(default=None)
+    base64_video: Optional[str] = Field(default=None)
+    base64_audio: Optional[str] = Field(default=None)
+
+    def __str__(self):
+        def fmt(value):
+            return value if value is not None else "not exist"
+
+        return (
+            f"\n"
+            f"Message(\n"
+            f"  role={self.role},\n"
+            f"  content={fmt(self.content)},\n"
+            f"  tool_calls={fmt(self.tool_calls)},\n"
+            f"  name={fmt(self.name)},\n"
+            f"  tool_call_id={fmt(self.tool_call_id)},\n"
+            f"  base64_image={'exist' if self.base64_image else 'not exist'},\n"
+            f"  base64_video={'exist' if self.base64_video else 'not exist'},\n"
+            f"  base64_audio={'exist' if self.base64_audio else 'not exist'}\n"
+            f")"
+        )
+
+    def __repr__(self):
+        return str(self)
 
     def __add__(self, other) -> List["Message"]:
         """支持 Message + list 或 Message + Message 的操作"""
@@ -94,15 +117,28 @@ class Message(BaseModel):
             message["tool_call_id"] = self.tool_call_id
         if self.base64_image is not None:
             message["base64_image"] = self.base64_image
+        if self.base64_video is not None:
+            message["base64_video"] = self.base64_video
+        if self.base64_audio is not None:
+            message["base64_audio"] = self.base64_audio
         return message
 
     @classmethod
     def user_message(
-        cls, content: str, base64_image: Optional[str] = None
+        cls,
+        content: str,
+        base64_image: Optional[str] = None,
+        base64_video: Optional[str] = None,
+        base64_audio: Optional[str] = None,
     ) -> "Message":
         """Create a user message"""
-        return cls(role=Role.USER, content=content, base64_image=base64_image)
+        return cls(role=Role.USER,
+                   content=content,
+                   base64_image=base64_image,
+                   base64_video=base64_video,
+                   base64_audio=base64_audio
 
+        )
     @classmethod
     def system_message(cls, content: str) -> "Message":
         """Create a system message"""
@@ -134,6 +170,8 @@ class Message(BaseModel):
         tool_calls: List[Any],
         content: Union[str, List[str]] = "",
         base64_image: Optional[str] = None,
+        base64_video: Optional[str] = None,
+        base64_audio: Optional[str] = None,
         **kwargs,
     ):
         """Create ToolCallsMessage from raw tool calls.
@@ -152,6 +190,8 @@ class Message(BaseModel):
             content=content,
             tool_calls=formatted_calls,
             base64_image=base64_image,
+            base64_video=base64_video,
+            base64_audio=base64_audio,
             **kwargs,
         )
 
@@ -159,6 +199,12 @@ class Message(BaseModel):
 class Memory(BaseModel):
     messages: List[Message] = Field(default_factory=list)
     max_messages: int = Field(default=100)
+
+    def __str__(self):
+        memory_str = ""
+        for message in self.messages:
+            memory_str += message.__str__()
+        return memory_str
 
     def add_message(self, message: Message) -> None:
         """Add a message to memory"""
@@ -170,6 +216,9 @@ class Memory(BaseModel):
     def add_messages(self, messages: List[Message]) -> None:
         """Add multiple messages to memory"""
         self.messages.extend(messages)
+        # Optional: Implement message limit
+        if len(self.messages) > self.max_messages:
+            self.messages = self.messages[-self.max_messages :]
 
     def clear(self) -> None:
         """Clear all messages"""

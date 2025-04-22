@@ -39,22 +39,16 @@ license: Apache License 2.0
 
    API KEY 获取网站：`https://bailian.console.aliyun.com/?tab=model#/api-key`
 
-4. 以多进程或者多线程的方式运行：
 
-   - 多线程的方式
-
-     ```bash
-     .venv/bin/python ./mira_thread.py
-     ```
-
-   - 多进程的方式
-
-     ```bash
-     .venv/bin/python ./mira_process.py
-     ```
-
-   浏览器中输入：`http://127.0.0.1:7860` 进入产品页面。
-
-   在终端输入 Agent 的提示词即可开始 OpenManus 的处理逻辑。
+4. 运行和调试 qwen-omni 的 agent
+   ```bash
+   python run_omni.py
+   ```
+     
+5. 运行前后端
+    ```bash
+   python launch.py
+   ```
+   前端界面并没有更新。。。
 
    

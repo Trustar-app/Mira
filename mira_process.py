@@ -419,7 +419,7 @@ with gr.Blocks() as demo, ms.Application(), antd.ConfigProvider():
 def start_backend_process():
     # 获取当前目录，用于确定main.py的位置
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    main_script = os.path.join(current_dir, "main.py")
+    main_script = os.path.join(current_dir, "run_omni.py")
     
     # 使用Python解释器启动main.py
     process = subprocess.Popen([sys.executable, main_script])

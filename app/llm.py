@@ -1,4 +1,5 @@
 import math
+from termios import TIOCPKT_DOSTOP
 from typing import Dict, List, Optional, Union
 
 import tiktoken
@@ -9,8 +10,9 @@ from openai import (
     AuthenticationError,
     OpenAIError,
     RateLimitError,
+    OpenAI
 )
-from openai.types.chat.chat_completion_message import ChatCompletionMessage
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -29,13 +31,10 @@ from app.schema import (
     Message,
     ToolChoice,
 )
+from app.prompt.no_system_prompt import SIMU_ASSIS_REPLY_PROMPT
 
 
-REASONING_MODELS = [
-    "o1",
-    "o3-mini",
-    "deepseek-reasoner",
-]
+REASONING_MODELS = ["o1", "o3-mini"]
 MULTIMODAL_MODELS = [
     "gpt-4-vision-preview",
     "gpt-4o",
@@ -43,6 +42,20 @@ MULTIMODAL_MODELS = [
     "claude-3-opus-20240229",
     "claude-3-sonnet-20240229",
     "claude-3-haiku-20240307",
+]
+OMNI_MODELS = [
+    "qwen-omni-turbo",
+    "qwen-omni-turbo-latest",
+    "qwen-omni-turbo-2025-03-26",
+    "qwen-omni-turbo-2025-01-19"
+    "qwen2.5-omni-7b"
+]
+SYSTEM_NOT_SUPPORTED_MODELS = [
+    "qwen-omni-turbo",
+    "qwen-omni-turbo-latest",
+    "qwen-omni-turbo-2025-03-26",
+    "qwen-omni-turbo-2025-01-19"
+    "qwen2.5-omni-7b"
 ]
 
 
@@ -207,6 +220,7 @@ class LLM:
             self.api_key = llm_config.api_key
             self.api_version = llm_config.api_version
             self.base_url = llm_config.base_url
+            self.must_stream = llm_config.must_stream  # some model like qwen-omni only support stream
 
             # Add token counting related attributes
             self.total_input_tokens = 0
@@ -232,17 +246,9 @@ class LLM:
                 )
             elif self.api_type == "aws":
                 self.client = BedrockClient()
-            elif self.api_type == "deepseek":
-                # DeepSeek API follows the OpenAI API spec, so we can use AsyncOpenAI client
-                # with the DeepSeek base URL
-                self.client = AsyncOpenAI(
-                    api_key=self.api_key,
-                    base_url=self.base_url,
-                    default_headers=(
-                        {"DeepSeekAPI-Version": self.api_version}
-                        if self.api_version
-                        else None
-                    ),
+            elif self.api_type == "qwen-omni":
+                self.client = OpenAI(
+                    api_key=self.api_key, base_url=self.base_url
                 )
             else:
                 self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
@@ -288,7 +294,10 @@ class LLM:
 
     @staticmethod
     def format_messages(
-        messages: List[Union[dict, Message]], supports_images: bool = False
+        messages: List[Union[dict, Message]],
+        supports_images: bool = False,
+        supports_videos: bool = False,
+        supports_audio: bool = False,
     ) -> List[dict]:
         """
         Format messages for LLM by converting them to OpenAI message format.
@@ -296,6 +305,8 @@ class LLM:
         Args:
             messages: List of messages that can be either dict or Message objects
             supports_images: Flag indicating if the target model supports image inputs
+            supports_videos: Flag indicating if the target model supports video inputs
+            supports_audio: Flag indicating if the target model supports audio inputs
 
         Returns:
             List[dict]: List of formatted messages in OpenAI format
@@ -312,6 +323,8 @@ class LLM:
             ... ]
             >>> formatted = LLM.format_messages(msgs)
         """
+
+        # TODO 这个函数不够鲁棒，遇到多3模态以上的message，不能良好拆分
         formatted_messages = []
 
         for message in messages:
@@ -360,6 +373,75 @@ class LLM:
                 elif not supports_images and message.get("base64_image"):
                     # Just remove the base64_image field and keep the text content
                     del message["base64_image"]
+
+                if supports_videos and message.get("base64_video"):
+                    # Initialize or convert content to appropriate format
+                    if not message.get("content"):
+                        message["content"] = []
+                    elif isinstance(message["content"], str):
+                        message["content"] = [
+                            {"type": "text", "text": message["content"]}
+                        ]
+                    elif isinstance(message["content"], list):
+                        # Convert string items to proper text objects
+                        message["content"] = [
+                            (
+                                {"type": "text", "text": item}
+                                if isinstance(item, str)
+                                else item
+                            )
+                            for item in message["content"]
+                        ]
+
+                    # Add the video to content
+                    message["content"].append(
+                        {
+                            "type": "video_url",
+                            "video_url": {
+                                "url": f"data:;base64,{message['base64_video']}"
+                            },
+                        }
+                    )
+
+                    # Remove the base64_video field
+                    del message["base64_video"]
+                elif not supports_videos and message.get("base64_video"):
+                    del message["base64_video"]
+
+                if supports_audio and message.get("base64_audio"):
+                    # Initialize or convert content to appropriate format
+                    if not message.get("content"):
+                        message["content"] = []
+                    elif isinstance(message["content"], str):
+                        message["content"] = [
+                            {"type": "text", "text": message["content"]}
+                        ]
+                    elif isinstance(message["content"], list):
+                        # Convert string items to proper text objects
+                        message["content"] = [
+                            (
+                                {"type": "text", "text": item}
+                                if isinstance(item, str)
+                                else item
+                            )
+                            for item in message["content"]
+                        ]
+
+                    # Add the audio to content
+                    message["content"].append(
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": f"data:;base64,{message['base64_audio']}",
+                                "format": "mp3"  # 默认使用mp3格式，也可以从消息中获取格式
+                            },
+                        }
+                    )
+
+                    # Remove the base64_audio field
+                    del message["base64_audio"]
+                elif not supports_audio and message.get("base64_audio"):
+                    del message["base64_audio"]
 
                 if "content" in message or "tool_calls" in message:
                     formatted_messages.append(message)
@@ -664,6 +746,358 @@ class LLM:
             (OpenAIError, Exception, ValueError)
         ),  # Don't retry TokenLimitExceeded
     )
+    async def ask_with_videos(
+        self,
+        messages: List[Union[dict, Message]],
+        videos: List[Union[str, dict]],
+        system_msgs: Optional[List[Union[dict, Message]]] = None,
+        stream: bool = False,
+        temperature: Optional[float] = None,
+    ) -> str:
+        """
+        Send a prompt with videos to the LLM and get the response.
+
+        Args:
+            messages: List of conversation messages
+            videos: List of video data in base64 format or URLs
+            system_msgs: Optional system messages to prepend
+            stream (bool): Whether to stream the response
+            temperature (float): Sampling temperature for the response
+
+        Returns:
+            str: The generated response
+
+        Raises:
+            TokenLimitExceeded: If token limits are exceeded
+            ValueError: If messages are invalid or response is empty
+            OpenAIError: If API call fails after retries
+            Exception: For unexpected errors
+        """
+        try:
+            # Check if the model supports videos
+            if self.model not in OMNI_MODELS:
+                raise ValueError(
+                    f"Model {self.model} does not support videos. Use a model from {OMNI_MODELS}"
+                )
+
+            # Get media support flags
+            supports_images = self.model in MULTIMODAL_MODELS or self.model in OMNI_MODELS
+            supports_videos = True  # We already checked this model supports videos
+            supports_audio = self.model in OMNI_MODELS
+
+            # Format messages with video support
+            formatted_messages = self.format_messages(
+                messages,
+                supports_images=supports_images,
+                supports_videos=supports_videos,
+                supports_audio=supports_audio
+            )
+
+            # Ensure the last message is from the user to attach videos
+            if not formatted_messages or formatted_messages[-1]["role"] != "user":
+                raise ValueError(
+                    "The last message must be from the user to attach videos"
+                )
+
+            # Process the last user message to include videos
+            last_message = formatted_messages[-1]
+
+            # Convert content to multimodal format if needed
+            content = last_message["content"]
+            multimodal_content = (
+                [{"type": "text", "text": content}]
+                if isinstance(content, str)
+                else content
+                if isinstance(content, list)
+                else []
+            )
+
+            # Add videos to content
+            for video in videos:
+                if isinstance(video, str):
+                    multimodal_content.append(
+                        {"type": "video_url", "video_url": {"url": video}}
+                    )
+                elif isinstance(video, dict) and "url" in video:
+                    multimodal_content.append({"type": "video_url", "video_url": video})
+                elif isinstance(video, dict) and "video_url" in video:
+                    multimodal_content.append(video)
+                else:
+                    raise ValueError(f"Unsupported video format: {video}")
+
+            # Update the message with multimodal content
+            last_message["content"] = multimodal_content
+
+            # Add system messages if provided
+            if system_msgs:
+                all_messages = (
+                    self.format_messages(
+                        system_msgs,
+                        supports_images=supports_images,
+                        supports_videos=supports_videos,
+                        supports_audio=supports_audio
+                    )
+                    + formatted_messages
+                )
+            else:
+                all_messages = formatted_messages
+
+            # Calculate tokens and check limits
+            input_tokens = self.count_message_tokens(all_messages)
+            if not self.check_token_limit(input_tokens):
+                raise TokenLimitExceeded(self.get_limit_error_message(input_tokens))
+
+            # Set up API parameters
+            params = {
+                "model": self.model,
+                "messages": all_messages,
+                "stream": stream,
+            }
+
+            # Add model-specific parameters
+            if self.model in REASONING_MODELS:
+                params["max_completion_tokens"] = self.max_tokens
+            else:
+                params["max_tokens"] = self.max_tokens
+                params["temperature"] = (
+                    temperature if temperature is not None else self.temperature
+                )
+
+            # Handle non-streaming request
+            if not stream:
+                response = await self.client.chat.completions.create(**params)
+
+                if not response.choices or not response.choices[0].message.content:
+                    raise ValueError("Empty or invalid response from LLM")
+
+                self.update_token_count(response.usage.prompt_tokens)
+                return response.choices[0].message.content
+
+            # Handle streaming request
+            self.update_token_count(input_tokens)
+            response = await self.client.chat.completions.create(**params)
+
+            collected_messages = []
+            async for chunk in response:
+                chunk_message = chunk.choices[0].delta.content or ""
+                collected_messages.append(chunk_message)
+                print(chunk_message, end="", flush=True)
+
+            print()  # Newline after streaming
+            full_response = "".join(collected_messages).strip()
+
+            if not full_response:
+                raise ValueError("Empty response from streaming LLM")
+
+            return full_response
+
+        except TokenLimitExceeded:
+            raise
+        except ValueError as ve:
+            logger.error(f"Validation error in ask_with_videos: {ve}")
+            raise
+        except OpenAIError as oe:
+            logger.error(f"OpenAI API error: {oe}")
+            if isinstance(oe, AuthenticationError):
+                logger.error("Authentication failed. Check API key.")
+            elif isinstance(oe, RateLimitError):
+                logger.error("Rate limit exceeded. Consider increasing retry attempts.")
+            elif isinstance(oe, APIError):
+                logger.error(f"API error: {oe}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in ask_with_videos: {e}")
+            raise
+
+    @retry(
+        wait=wait_random_exponential(min=1, max=60),
+        stop=stop_after_attempt(6),
+        retry=retry_if_exception_type(
+            (OpenAIError, Exception, ValueError)
+        ),  # Don't retry TokenLimitExceeded
+    )
+    async def ask_with_audio(
+        self,
+        messages: List[Union[dict, Message]],
+        audio: List[Union[str, dict]],
+        audio_format: str = "mp3",
+        system_msgs: Optional[List[Union[dict, Message]]] = None,
+        stream: bool = False,
+        temperature: Optional[float] = None,
+    ) -> str:
+        """
+        Send a prompt with audio to the LLM and get the response.
+
+        Args:
+            messages: List of conversation messages
+            audio: List of audio data in base64 format or URLs
+            audio_format: Format of the audio (mp3, wav, etc.)
+            system_msgs: Optional system messages to prepend
+            stream (bool): Whether to stream the response
+            temperature (float): Sampling temperature for the response
+
+        Returns:
+            str: The generated response
+
+        Raises:
+            TokenLimitExceeded: If token limits are exceeded
+            ValueError: If messages are invalid or response is empty
+            OpenAIError: If API call fails after retries
+            Exception: For unexpected errors
+        """
+        try:
+            # Check if the model supports audio
+            if self.model not in OMNI_MODELS:
+                raise ValueError(
+                    f"Model {self.model} does not support audio. Use a model from {OMNI_MODELS}"
+                )
+
+            # Get media support flags
+            supports_images = self.model in MULTIMODAL_MODELS or self.model in OMNI_MODELS
+            supports_videos = self.model in OMNI_MODELS
+            supports_audio = True  # We already checked this model supports audio
+
+            # Format messages with audio support
+            formatted_messages = self.format_messages(
+                messages,
+                supports_images=supports_images,
+                supports_videos=supports_videos,
+                supports_audio=supports_audio
+            )
+
+            # Ensure the last message is from the user to attach audio
+            if not formatted_messages or formatted_messages[-1]["role"] != "user":
+                raise ValueError(
+                    "The last message must be from the user to attach audio"
+                )
+
+            # Process the last user message to include audio
+            last_message = formatted_messages[-1]
+
+            # Convert content to multimodal format if needed
+            content = last_message["content"]
+            multimodal_content = (
+                [{"type": "text", "text": content}]
+                if isinstance(content, str)
+                else content
+                if isinstance(content, list)
+                else []
+            )
+
+            # Add audio to content
+            for audio_item in audio:
+                if isinstance(audio_item, str):
+                    multimodal_content.append(
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": audio_item,
+                                "format": audio_format
+                            }
+                        }
+                    )
+                elif isinstance(audio_item, dict) and "data" in audio_item:
+                    audio_data = {
+                        "data": audio_item["data"],
+                        "format": audio_item.get("format", audio_format)
+                    }
+                    multimodal_content.append({"type": "input_audio", "input_audio": audio_data})
+                elif isinstance(audio_item, dict) and "input_audio" in audio_item:
+                    multimodal_content.append(audio_item)
+                else:
+                    raise ValueError(f"Unsupported audio format: {audio_item}")
+
+            # Update the message with multimodal content
+            last_message["content"] = multimodal_content
+
+            # Add system messages if provided
+            if system_msgs:
+                all_messages = (
+                    self.format_messages(
+                        system_msgs,
+                        supports_images=supports_images,
+                        supports_videos=supports_videos,
+                        supports_audio=supports_audio
+                    )
+                    + formatted_messages
+                )
+            else:
+                all_messages = formatted_messages
+
+            # Calculate tokens and check limits
+            input_tokens = self.count_message_tokens(all_messages)
+            if not self.check_token_limit(input_tokens):
+                raise TokenLimitExceeded(self.get_limit_error_message(input_tokens))
+
+            # Set up API parameters
+            params = {
+                "model": self.model,
+                "messages": all_messages,
+                "stream": stream,
+            }
+
+            # Add model-specific parameters
+            if self.model in REASONING_MODELS:
+                params["max_completion_tokens"] = self.max_tokens
+            else:
+                params["max_tokens"] = self.max_tokens
+                params["temperature"] = (
+                    temperature if temperature is not None else self.temperature
+                )
+
+            # Handle non-streaming request
+            if not stream:
+                response = await self.client.chat.completions.create(**params)
+
+                if not response.choices or not response.choices[0].message.content:
+                    raise ValueError("Empty or invalid response from LLM")
+
+                self.update_token_count(response.usage.prompt_tokens)
+                return response.choices[0].message.content
+
+            # Handle streaming request
+            self.update_token_count(input_tokens)
+            response = await self.client.chat.completions.create(**params)
+
+            collected_messages = []
+            async for chunk in response:
+                chunk_message = chunk.choices[0].delta.content or ""
+                collected_messages.append(chunk_message)
+                print(chunk_message, end="", flush=True)
+
+            print()  # Newline after streaming
+            full_response = "".join(collected_messages).strip()
+
+            if not full_response:
+                raise ValueError("Empty response from streaming LLM")
+
+            return full_response
+
+        except TokenLimitExceeded:
+            raise
+        except ValueError as ve:
+            logger.error(f"Validation error in ask_with_audio: {ve}")
+            raise
+        except OpenAIError as oe:
+            logger.error(f"OpenAI API error: {oe}")
+            if isinstance(oe, AuthenticationError):
+                logger.error("Authentication failed. Check API key.")
+            elif isinstance(oe, RateLimitError):
+                logger.error("Rate limit exceeded. Consider increasing retry attempts.")
+            elif isinstance(oe, APIError):
+                logger.error(f"API error: {oe}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in ask_with_audio: {e}")
+            raise
+
+    @retry(
+        wait=wait_random_exponential(min=1, max=60),
+        stop=stop_after_attempt(6),
+        retry=retry_if_exception_type(
+            (OpenAIError, Exception, ValueError)
+        ),  # Don't retry TokenLimitExceeded
+    )
     async def ask_tool(
         self,
         messages: List[Union[dict, Message]],
@@ -701,23 +1135,38 @@ class LLM:
                 raise ValueError(f"Invalid tool_choice: {tool_choice}")
 
             # Check if the model supports images
-            supports_images = self.model in MULTIMODAL_MODELS
+            supports_images = supports_videos = supports_audios \
+                = self.model in MULTIMODAL_MODELS or self.model in OMNI_MODELS
+
 
             # Format messages
             if system_msgs:
-                system_msgs = self.format_messages(system_msgs, supports_images)
-                messages = system_msgs + self.format_messages(messages, supports_images)
+                if self.model in SYSTEM_NOT_SUPPORTED_MODELS:   # TODO 事实上，system_message 是否应该在这里做更改？？？？
+                    system_msgs[0].role = "user"
+                    simu_assis_reply = Message(role="assistant", content=SIMU_ASSIS_REPLY_PROMPT)
+                    system_msgs = self.format_messages(system_msgs,
+                                                       supports_images, supports_videos, supports_audios)
+                    simu_assis_reply = self.format_messages([simu_assis_reply],
+                                                            supports_images, supports_videos, supports_audios)
+                    system_msgs = system_msgs + simu_assis_reply
+                    messages = system_msgs + self.format_messages(messages,
+                                                                  supports_images, supports_videos, supports_audios)
+                else:
+                    system_msgs = self.format_messages(messages,
+                                                       supports_images, supports_videos, supports_audios)
+                    messages = system_msgs + self.format_messages(messages,
+                                                                  supports_images, supports_videos, supports_audios)
             else:
-                messages = self.format_messages(messages, supports_images)
+                messages = self.format_messages(messages, supports_images, supports_videos, supports_audios)
 
             # Calculate input token count
-            input_tokens = self.count_message_tokens(messages)
+            input_tokens = self.count_message_tokens(messages)  # TODO [低优先级] 这个 count_message_tokens 函数也需要适配
 
             # If there are tools, calculate token count for tool descriptions
             tools_tokens = 0
             if tools:
                 for tool in tools:
-                    tools_tokens += self.count_tokens(str(tool))
+                    tools_tokens += self.count_tokens(str(tool)) # TODO [低优先级] 这个 count_tokens 函数也需要适配
 
             input_tokens += tools_tokens
 
@@ -745,15 +1194,79 @@ class LLM:
 
             if self.model in REASONING_MODELS:
                 params["max_completion_tokens"] = self.max_tokens
+            elif self.model in OMNI_MODELS:
+                # TODO 这里添加对于 omni 模型特异的属性
+                # 参考 https://help.aliyun.com/zh/model-studio/qwen-omni?scm=20140722.S_help@@%E6%96%87%E6%A1%A3@@2867839.S_RQW@ag0+BB2@ag0+BB1@ag0+hot+os0.ID_2867839-RL_omni-LOC_doc~UND~ab-OR_ser-PAR1_212a5d4017449393607675450d1e40-V_4-P0_0-P1_0#ad2e6f97dbfa2
+                # # 设置输出数据的模态，当前支持两种：["text","audio"]、["text"]
+                #     modalities=["text", "audio"],
+                #     audio={"voice": "Chelsie", "format": "wav"},
+                #     # stream 必须设置为 True，否则会报错
+                #     stream=True,
+                #     stream_options={"include_usage": True},
+                # TODO 这里的参量似乎得写到 config 中去
+                params["modalities"] = ["text"]
+                pass
             else:
                 params["max_tokens"] = self.max_tokens
                 params["temperature"] = (
                     temperature if temperature is not None else self.temperature
                 )
 
-            response: ChatCompletion = await self.client.chat.completions.create(
-                **params, stream=False
-            )
+            # TODO 加入如果用户忘记写 must_stream = true, 捕获这个错误，并给出用户提示
+            params["stream"] = False  # Always use non-streaming for tool requests
+            if self.must_stream is not None:
+                params["stream"] = self.must_stream  # some model like qwen-omni only support stream
+
+            if not self.must_stream:
+                response: ChatCompletion = await self.client.chat.completions.create(
+                    **params
+                )
+
+            # 这里的输出处理，由于 qwen-omni 只支持流式输出，所以对于流式输出的模型需要支持拼接，与非流式传输的行为要一致
+            if self.must_stream:
+                response_stream = self.client.chat.completions.create(
+                    **params,
+                )
+
+                # 收集流式响应内容
+                content = ""
+                tool_calls = []
+                role = "assistant"
+                # TODO 这里会不会不够鲁棒，边界条件是否考虑清楚了？？？
+                for chunk in response_stream:
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta
+                        if delta.content is not None:
+                            content += delta.content
+
+                        # 收集工具调用信息
+                        if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                            for tool_call in delta.tool_calls:
+                                # 查找或创建对应的工具调用
+                                if tool_call.index >= len(tool_calls):
+                                    tool_calls.append({
+                                        "id": f"call_{len(tool_calls)}",  # 生成一个唯一ID
+                                        "type": "function",  # 设置类型为function
+                                        "function": {"name": "", "arguments": ""}
+                                    })
+
+                                # 如果有ID，更新ID
+                                if hasattr(tool_call, 'id') and tool_call.id is not None:
+                                    tool_calls[tool_call.index]["id"] = tool_call.id
+
+                                # 更新工具调用信息
+                                if hasattr(tool_call, 'function'):
+                                    if hasattr(tool_call.function, 'name') and tool_call.function.name is not None:
+                                        tool_calls[tool_call.index]["function"]["name"] += tool_call.function.name
+                                    if hasattr(tool_call.function, 'arguments') and tool_call.function.arguments is not None:
+                                        tool_calls[tool_call.index]["function"]["arguments"] += tool_call.function.arguments
+
+                # 构造一个与非流式API返回格式相同的消息对象
+                return ChatCompletionMessage(
+                    content=content,
+                    role=role,
+                    tool_calls=tool_calls if tool_calls else None
+                )
 
             # Check if response is valid
             if not response.choices or not response.choices[0].message:

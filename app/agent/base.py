@@ -21,6 +21,11 @@ class BaseAgent(BaseModel, ABC):
     name: str = Field(..., description="Unique name of the agent")
     description: Optional[str] = Field(None, description="Optional agent description")
 
+    # omni
+    _current_base64_image: Optional[str] = None
+    _current_base64_video: Optional[str] = None
+    _current_base64_audio: Optional[str] = None
+
     # Prompts
     system_prompt: Optional[str] = Field(
         None, description="System-level instruction prompt"
