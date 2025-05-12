@@ -1,0 +1,12 @@
+# config.py
+# 配置模型名、API key、模型输入类型等
+
+MODEL_NAME = ""
+SUPPORT_VIDEO_AUDIO = False 
+
+OPENAI_API_KEY = "sk-4be3f2729fbf48f7b91dec9f2415cbd7"
+OPENAI_API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+# YouCam API 配置
+YOUCAM_API_KEY = "YKzXjdtGCDstjn0A1qIflbTha6j5jIKd"
+YOUCAM_SECRET_KEY = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDonv79JRS9aFJRVl8W0BTRwMqZPUCuTCKrG+DrvJh0azEixeBxmz09K+IwtlWZufm3CHnUMcsZmJgp5gSYpcT1zHVhYZzSC0Q9vYv7Np3t6X8H/eJ/PXfXZvS04tHU0/8JaZ75SLDLmKRLKCgOwuYvMlSVdsmAUXx6mJLn3TUd/QIDAQAB" 

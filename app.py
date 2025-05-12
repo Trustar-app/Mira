@@ -1,416 +1,91 @@
-import gradio as gr
-from http import HTTPStatus
-import uuid
-from gradio_client import utils as client_utils
-import gradio.processing_utils as processing_utils
-import base64
-from openai import OpenAI
-import soundfile as sf
-import numpy as np
-import io
-import os
-from dotenv import load_dotenv
-import modelscope_studio.components.base as ms
-import modelscope_studio.components.antd as antd
-import shutil
-
-# 加载环境变量
-load_dotenv()
-
-# Voice settings
-VOICE_LIST = ['Cherry', 'Ethan', 'Serena', 'Chelsie']
-DEFAULT_VOICE = 'Cherry'
-
-# 本地文件存储路径
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-default_system_prompt = 'You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, capable of perceiving auditory and visual inputs, as well as generating text and speech.'
-
-API_KEY = os.environ['API_KEY']
-
-client = OpenAI(
-    api_key=API_KEY,
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+# app.py
+from graphs.mira_graph import mira_graph
+from tools.common.formatters import (
+    frontend_inputs_to_state, state_to_frontend_outputs
 )
+import gradio as gr
+import logging
+import os
 
-is_modelscope_studio = os.getenv('MODELSCOPE_ENVIRONMENT') == 'studio'
+# 日志目录
+os.makedirs("logs", exist_ok=True)
 
-
-def get_text(text: str, cn_text: str):
-    if is_modelscope_studio:
-        return cn_text
-    return text
-
-
-def save_uploaded_file(file_path: str) -> str:
-    """保存上传的文件到本地目录"""
-    if file_path.startswith("http"):
-        return file_path
-    
-    # 生成唯一的文件名
-    ext = os.path.splitext(file_path)[1]
-    new_filename = f"{uuid.uuid4()}{ext}"
-    new_file_path = os.path.join(UPLOAD_DIR, new_filename)
-    
-    # 复制文件到上传目录
-    shutil.copy2(file_path, new_file_path)
-    return new_file_path
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    filename="logs/face_detect.log",
+    filemode="a",
+    encoding="utf-8"
+)
+# 控制台同步输出
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+console.setFormatter(formatter)
+logging.getLogger().addHandler(console)
 
 
-def format_history(history: list, system_prompt: str, file_cache):
-    messages = []
-    messages.append({"role": "system", "content": system_prompt})
-    for item in history:
-        if isinstance(item["content"], str):
-            messages.append({"role": item['role'], "content": item['content']})
-        elif item["role"] == "user" and (isinstance(item["content"], list) or
-                                         isinstance(item["content"], tuple)):
-            file_path = item["content"][0]
+def process_user_input(video, audio, text, chat=None):
+    markdown = ""
+    image = None
+    gallery = []
+    profile = ""
+    products = []
 
-            # 检查缓存中是否已有该文件的本地路径
-            local_path = file_cache.get(file_path, save_uploaded_file(file_path))
-            file_cache[file_path] = local_path
-
-            mime_type = client_utils.get_mimetype(local_path)
-            ext = os.path.splitext(local_path)[1][1:]  # 移除点号
-
-            # 将文件转换为 base64
-            with open(local_path, "rb") as f:
-                file_data = base64.b64encode(f.read()).decode("utf-8")
-                file_url = f"data:{mime_type};base64,{file_data}"
-
-            if mime_type.startswith("image"):
-                messages.append({
-                    "role": item['role'],
-                    "content": [{
-                        "type": "image_url",
-                        "image_url": {
-                            "url": file_url
-                        }
-                    }]
-                })
-            elif mime_type.startswith("video"):
-                messages.append({
-                    "role": item['role'],
-                    "content": [{
-                        "type": "video_url",
-                        "video_url": {
-                            "url": file_url
-                        }
-                    }]
-                })
-            elif mime_type.startswith("audio"):
-                messages.append({
-                    "role": item['role'],
-                    "content": [{
-                        "type": "input_audio",
-                        "input_audio": {
-                            "data": file_url,
-                            "format": ext
-                        }
-                    }]
-                })
-    return messages
-
-
-def predict(messages, voice=DEFAULT_VOICE):
-    try:
-        print('predict history: ', messages)
-        completion = client.chat.completions.create(
-            model="qwen-omni-turbo",
-            messages=messages,
-            modalities=["text", "audio"],
-            audio={
-                "voice": voice,
-                "format": "wav"
-            },
-            stream=True,
-            stream_options={"include_usage": True})
-
-        response_text = ""
-        audio_str = ""
-        for chunk in completion:
-            if chunk.choices:
-                delta = chunk.choices[0].delta
-                if hasattr(
-                        delta,
-                        'audio') and delta.audio and delta.audio.get("transcript"):
-                    response_text += delta.audio.get("transcript")
-                if hasattr(delta,
-                        'audio') and delta.audio and delta.audio.get("data"):
-                    audio_str += delta.audio.get("data")
-                yield {"type": "text", "data": response_text}
-        pcm_bytes = base64.b64decode(audio_str)
-        audio_np = np.frombuffer(pcm_bytes, dtype=np.int16)
-        wav_io = io.BytesIO()
-        sf.write(wav_io, audio_np, samplerate=24000, format="WAV")
-        wav_io.seek(0)
-        wav_bytes = wav_io.getvalue()
-        audio_path = processing_utils.save_bytes_to_cache(
-            wav_bytes, "audio.wav", cache_dir=demo.GRADIO_CACHE)
-        yield {"type": "audio", "data": audio_path}
-    except Exception as e:
-        error_message = f"{str(e)}"
-        raise gr.Error(error_message, duration=8)
-
-
-
-def media_predict(audio, video, history, system_prompt, state_value,
-                  voice_choice):
-    files = [audio, video]
-    for f in files:
-        if f:
-            history.append({"role": "user", "content": (f, )})
-
-    formatted_history = format_history(history=history,
-                                       system_prompt=system_prompt,
-                                       file_cache=state_value["file_cache"])
-
-    # First yield
-    yield (
-        None,  # microphone
-        None,  # webcam
-        history,  # media_chatbot
-        gr.update(visible=False),  # submit_btn
-        gr.update(visible=True),  # stop_btn
-        state_value  # state
-    )
-
-    history.append({"role": "assistant", "content": ""})
-
-    for chunk in predict(formatted_history, voice_choice):
-        if chunk["type"] == "text":
-            history[-1]["content"] = chunk["data"]
-            yield (
-                None,  # microphone
-                None,  # webcam
-                history,  # media_chatbot
-                gr.update(visible=False),  # submit_btn
-                gr.update(visible=True),  # stop_btn
-                state_value  # state
-            )
-        if chunk["type"] == "audio":
-            history.append({
-                "role": "assistant",
-                "content": gr.Audio(chunk["data"])
-            })
-
-    # Final yield
-    yield (
-        None,  # microphone
-        None,  # webcam
-        history,  # media_chatbot
-        gr.update(visible=True),  # submit_btn
-        gr.update(visible=False),  # stop_btn
-        state_value  # state
-    )
-
-
-def chat_predict(text, audio, image, video, history, system_prompt,
-                 state_value, voice_choice):
-    # Process text input
+    if chat is None:
+        chat = []
     if text:
-        history.append({"role": "user", "content": text})
-
-    # Process audio input
+        chat.append({"role": "user", "content": text})
     if audio:
-        history.append({"role": "user", "content": (audio, )})
-
-    # Process image input
-    if image:
-        history.append({"role": "user", "content": (image, )})
-
-    # Process video input
+        chat.append({"role": "user", "content": gr.Audio(audio)})
     if video:
-        history.append({"role": "user", "content": (video, )})
+        chat.append({"role": "user", "content": gr.Video(video)})
+    yield chat, markdown, image, gallery, profile, products, None, None, ""
+    
+    for step in mira_graph(frontend_inputs_to_state(video, audio, text, chat)):
+        # 基于不同结果，分别处理 chat、markdown、image、gallery、profile、products 信息,并yield，有的是中间的进度信息，有的是结果
+        yield state_to_frontend_outputs(step)
+        
+                
 
-    formatted_history = format_history(history=history,
-                                       system_prompt=system_prompt,
-                                       file_cache=state_value["file_cache"])
+def build_demo():
+    with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {background: #f8f9fa;} .title {font-size:2.2em;font-weight:bold;color:#d63384;margin-bottom:0.2em;} .subtitle{color:#868e96;}") as demo:
+        gr.Markdown("<div class='title'>🎀 Mira 智能化妆镜</div><div class='subtitle'>AI赋能你的美丽日常</div>", elem_id="main-title")
+        with gr.Row():
+            # 第一行：左-输入区，右-反馈区
+            with gr.Column(scale=1):
+                gr.Markdown("#### 📥 用户输入区")
+                video_in = gr.Video(sources=["webcam"], include_audio=True, label="录制视频（含音频）")
+                audio_in = gr.Audio(sources=["microphone"], label="语音输入")
+                text_in = gr.Textbox(label="文本输入", lines=2, placeholder="请输入你的问题或需求…")
+                submit_btn = gr.Button("提交", elem_id="submit-btn")
+            with gr.Column(scale=2):
+                with gr.Row():
+                    with gr.Column():
+                        gr.Markdown("#### 🤖 AI对话区")
+                        chat_out = gr.Chatbot(label="AI对话", value=[], type="messages")
+                    with gr.Column():
+                        gr.Markdown("#### 🧾 结构化反馈区")
+                        markdown_out = gr.Markdown(label="结构化分析结果")
+                        image_out = gr.Image(label="分析图片")
+                        gallery_out = gr.Gallery(label="反馈图片集", columns=4)
+        with gr.Row():
+            # 第二行：左-用户档案，右-产品卡片集
+            with gr.Column():
+                gr.Markdown("#### 📦 用户档案")
+                profile_out = gr.Markdown("")
+            with gr.Column():
+                gr.Markdown("#### 💄 产品卡片集")
+                products_out = gr.Gallery(label="产品卡片集", value=[], columns=2, height=220)
+        # 事件绑定
+        submit_btn.click(
+            process_user_input,
+            inputs=[video_in, audio_in, text_in, chat_out],
+            outputs=[chat_out, markdown_out, image_out, gallery_out, profile_out, products_out, video_in, audio_in, text_in]
+        )
+    return demo
 
-    yield None, None, None, None, history, state_value
+demo = build_demo()
 
-    history.append({"role": "assistant", "content": ""})
-    for chunk in predict(formatted_history, voice_choice):
-        if chunk["type"] == "text":
-            history[-1]["content"] = chunk["data"]
-            yield gr.skip(), gr.skip(), gr.skip(), gr.skip(
-            ), history, state_value
-        if chunk["type"] == "audio":
-            history.append({
-                "role": "assistant",
-                "content": gr.Audio(chunk["data"])
-            })
-    yield gr.skip(), gr.skip(), gr.skip(), gr.skip(), history, state_value
-
-
-with gr.Blocks() as demo, ms.Application(), antd.ConfigProvider():
-    state = gr.State({"file_cache": {}})
-
-    with gr.Sidebar(open=False):
-        system_prompt_textbox = gr.Textbox(label="System Prompt",
-                                           value=default_system_prompt)
-        voice_choice = gr.Dropdown(label="Voice Choice",
-                                   choices=VOICE_LIST,
-                                   value=DEFAULT_VOICE)
-    with antd.Flex(gap="small", justify="center", align="center"):
-        antd.Image('./logo-1.png', preview=False, width=67, height=67)
-        with antd.Flex(vertical=True, gap="small", align="center"):
-            antd.Typography.Title("Mira",
-                                  level=1,
-                                  elem_style=dict(margin=0, fontSize=28))
-            with antd.Flex(vertical=True, gap="small"):
-                antd.Typography.Text(get_text("🎯 Instructions for use:",
-                                              "🎯 使用说明："),
-                                     strong=True)
-                antd.Typography.Text(
-                    get_text(
-                        "1️⃣ Click the Audio Record button or the Camera Record button.",
-                        "1️⃣ 点击音频录制按钮，或摄像头-录制按钮"))
-                antd.Typography.Text(
-                    get_text("2️⃣ Input audio or video.", "2️⃣ 输入音频或者视频"))
-                antd.Typography.Text(
-                    get_text(
-                        "3️⃣ Click the submit button and wait for the model's response.",
-                        "3️⃣ 点击提交并等待模型的回答"))
-        antd.Image('./logo-2.png',
-                   preview=False,
-                   width=80,
-                   height=80,
-                   elem_style=dict(marginTop=5))
-    with gr.Tabs():
-        with gr.Tab("Online"):
-            with gr.Row():
-                with gr.Column(scale=1):
-                    microphone = gr.Audio(sources=['microphone'],
-                                          format="wav",
-                                          type="filepath")
-                    webcam = gr.Video(sources=['webcam'],
-                                      format="mp4",
-                                      height=400,
-                                      include_audio=True)
-                    submit_btn = gr.Button(get_text("Submit", "提交"),
-                                           variant="primary")
-                    stop_btn = gr.Button(get_text("Stop", "停止"), visible=False)
-                    clear_btn = gr.Button(get_text("Clear History", "清除历史"))
-                with gr.Column(scale=2):
-                    media_chatbot = gr.Chatbot(height=650, type="messages")
-
-                def clear_history():
-                    return [], gr.update(value=None), gr.update(value=None)
-
-                submit_event = submit_btn.click(fn=media_predict,
-                                                inputs=[
-                                                    microphone, webcam,
-                                                    media_chatbot,
-                                                    system_prompt_textbox,
-                                                    state, voice_choice
-                                                ],
-                                                outputs=[
-                                                    microphone, webcam,
-                                                    media_chatbot, submit_btn,
-                                                    stop_btn, state
-                                                ])
-                stop_btn.click(
-                    fn=lambda:
-                    (gr.update(visible=True), gr.update(visible=False)),
-                    inputs=None,
-                    outputs=[submit_btn, stop_btn],
-                    cancels=[submit_event],
-                    queue=False)
-                clear_btn.click(fn=clear_history,
-                                inputs=None,
-                                outputs=[media_chatbot, microphone, webcam])
-
-        with gr.Tab("Offline"):
-            chatbot = gr.Chatbot(type="messages", height=650)
-
-            # Media upload section in one row
-            with gr.Row(equal_height=True):
-                audio_input = gr.Audio(sources=["upload"],
-                                       type="filepath",
-                                       label="Upload Audio",
-                                       elem_classes="media-upload",
-                                       scale=1)
-                image_input = gr.Image(sources=["upload"],
-                                       type="filepath",
-                                       label="Upload Image",
-                                       elem_classes="media-upload",
-                                       scale=1)
-                video_input = gr.Video(sources=["upload"],
-                                       label="Upload Video",
-                                       elem_classes="media-upload",
-                                       scale=1)
-
-            # Text input section
-            text_input = gr.Textbox(show_label=False,
-                                    placeholder="Enter text here...")
-
-            # Control buttons
-            with gr.Row():
-                submit_btn = gr.Button(get_text("Submit", "提交"),
-                                       variant="primary",
-                                       size="lg")
-                stop_btn = gr.Button(get_text("Stop", "停止"),
-                                     visible=False,
-                                     size="lg")
-                clear_btn = gr.Button(get_text("Clear History", "清除历史"),
-                                      size="lg")
-
-            def clear_chat_history():
-                return [], gr.update(value=None), gr.update(
-                    value=None), gr.update(value=None), gr.update(value=None)
-
-            submit_event = gr.on(
-                triggers=[submit_btn.click, text_input.submit],
-                fn=chat_predict,
-                inputs=[
-                    text_input, audio_input, image_input, video_input, chatbot,
-                    system_prompt_textbox, state, voice_choice
-                ],
-                outputs=[
-                    text_input, audio_input, image_input, video_input, chatbot,
-                    state
-                ])
-
-            stop_btn.click(fn=lambda:
-                           (gr.update(visible=True), gr.update(visible=False)),
-                           inputs=None,
-                           outputs=[submit_btn, stop_btn],
-                           cancels=[submit_event],
-                           queue=False)
-
-            clear_btn.click(fn=clear_chat_history,
-                            inputs=None,
-                            outputs=[
-                                chatbot, text_input, audio_input, image_input,
-                                video_input
-                            ])
-
-            # Add some custom CSS to improve the layout
-            gr.HTML("""
-                <style>
-                    .media-upload {
-                        margin: 10px;
-                        min-height: 160px;
-                    }
-                    .media-upload > .wrap {
-                        border: 2px dashed #ccc;
-                        border-radius: 8px;
-                        padding: 10px;
-                        height: 100%;
-                    }
-                    .media-upload:hover > .wrap {
-                        border-color: #666;
-                    }
-                    /* Make upload areas equal width */
-                    .media-upload {
-                        flex: 1;
-                        min-width: 0;
-                    }
-                </style>
-            """)
-
-demo.queue(default_concurrency_limit=100, max_size=100).launch(max_threads=100,
-                                                               ssr_mode=False)
+if __name__ == "__main__":
+    demo.launch() 

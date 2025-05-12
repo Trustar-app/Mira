@@ -1,50 +1,21 @@
----
-# 详细文档见https://modelscope.cn/docs/%E5%88%9B%E7%A9%BA%E9%97%B4%E5%8D%A1%E7%89%87
+# Mira 智能化妆镜
 
-tags: #自定义标签
--
-datasets: #关联数据集
-  evaluation:
-  #- iic/ICDAR13_HCTR_Dataset
-  test:
-  #- iic/MTWI
-  train:
-  #- iic/SIBR
-models: #关联模型
-- Qwen/Qwen2.5-Omni-7B
+本项目为基于 LangGraph + LangChain + Gradio 的智能化妆镜 MVP。
 
-## 启动文件(若SDK为Gradio/Streamlit，默认为app.py, 若为Static HTML, 默认为index.html)
-# deployspec:
-#   entry_file: app.py
-license: Apache License 2.0
----
+## 目录结构
 
-## 部署
+- app.py：应用入口，组合 Gradio UI 与 LangGraph 调用
+- workflows/：工作流与节点处理逻辑
+- tools/：多媒体与 AI 工具
+- prompts/：提示词与格式化工具
+- config.py：配置文件
+- requirements.txt：依赖包
 
-### 本地部署
-1. 下载 uv 包管理器
+## 功能简介
 
-   ```bash
-   pip install uv
-   ```
+- 视频/音频/文本输入
+- 意图识别与多轮对话
+- 肤质检测、产品推荐、化妆指导
+- 用户档案与进度管理
 
-2. 安装依赖
-
-   ```bash
-   sh make-env.sh
-   source .venv/bin/activate  
-   ```
-
-3. 在 `.env `文件中写入自己的 `API_KEY`
-
-   API KEY 获取网站：`https://bailian.console.aliyun.com/?tab=model#/api-key`
-
-4. 运行
-
-   ```bash
-   .venv/bin/python ./app.py
-   ```
-
-   浏览器中输入：`http://127.0.0.1:7860` 进入产品页面
-
-   
+> 详细设计与实现请见 design.md 
