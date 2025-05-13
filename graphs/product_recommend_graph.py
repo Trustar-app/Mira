@@ -35,3 +35,5 @@ def personalized_reason_node(state):
     """
     # 调用 generate_personalized_reasons 工具函数
     # 推送推荐结果和理由到前端
+
+product_recommend_graph = build_product_recommend_graph()

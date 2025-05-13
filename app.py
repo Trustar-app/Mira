@@ -5,27 +5,17 @@ from tools.common.formatters import (
 )
 import gradio as gr
 import logging
-import os
+import uuid
+from langgraph.checkpoint.memory import MemorySaver
 
-# 日志目录
-os.makedirs("logs", exist_ok=True)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    filename="logs/face_detect.log",
-    filemode="a",
-    encoding="utf-8"
-)
-# 控制台同步输出
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-console.setFormatter(formatter)
-logging.getLogger().addHandler(console)
+# 初始化MemorySaver并用于mira_graph
+memory = MemorySaver()
 
 
-def process_user_input(video, audio, text, chat=None):
+def process_user_input(video, audio, text, chat=None, thread_id=None):
+    """
+    支持多轮对话记忆，thread_id用于区分不同会话。
+    """
     markdown = ""
     image = None
     gallery = []
@@ -40,17 +30,19 @@ def process_user_input(video, audio, text, chat=None):
         chat.append({"role": "user", "content": gr.Audio(audio)})
     if video:
         chat.append({"role": "user", "content": gr.Video(video)})
-    yield chat, markdown, image, gallery, profile, products, None, None, ""
+    yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id
     
-    for step in mira_graph(frontend_inputs_to_state(video, audio, text, chat)):
-        # 基于不同结果，分别处理 chat、markdown、image、gallery、profile、products 信息,并yield，有的是中间的进度信息，有的是结果
-        yield state_to_frontend_outputs(step)
+    # 关键：传递thread_id到mira_graph，实现多会话记忆
+    config = {"configurable": {"thread_id": thread_id}}
+    for step in mira_graph(frontend_inputs_to_state(video, audio, text, chat), config):
+        yield (*state_to_frontend_outputs(step), thread_id)
         
                 
 
 def build_demo():
     with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {background: #f8f9fa;} .title {font-size:2.2em;font-weight:bold;color:#d63384;margin-bottom:0.2em;} .subtitle{color:#868e96;}") as demo:
         gr.Markdown("<div class='title'>🎀 Mira 智能化妆镜</div><div class='subtitle'>AI赋能你的美丽日常</div>", elem_id="main-title")
+        thread_id_state = gr.State(str(uuid.uuid4()))  # 用于存储当前对话的thread_id
         with gr.Row():
             # 第一行：左-输入区，右-反馈区
             with gr.Column(scale=1):
@@ -59,6 +51,7 @@ def build_demo():
                 audio_in = gr.Audio(sources=["microphone"], label="语音输入")
                 text_in = gr.Textbox(label="文本输入", lines=2, placeholder="请输入你的问题或需求…")
                 submit_btn = gr.Button("提交", elem_id="submit-btn")
+                new_chat_btn = gr.Button("新建对话", elem_id="new-chat-btn")
             with gr.Column(scale=2):
                 with gr.Row():
                     with gr.Column():
@@ -80,8 +73,16 @@ def build_demo():
         # 事件绑定
         submit_btn.click(
             process_user_input,
-            inputs=[video_in, audio_in, text_in, chat_out],
-            outputs=[chat_out, markdown_out, image_out, gallery_out, profile_out, products_out, video_in, audio_in, text_in]
+            inputs=[video_in, audio_in, text_in, chat_out, thread_id_state],
+            outputs=[chat_out, markdown_out, image_out, gallery_out, profile_out, products_out, video_in, audio_in, text_in, thread_id_state]
+        )
+        # 新建对话按钮：重置所有输入输出，并生成新thread_id
+        def new_chat():
+            return [], "", None, [], "", [], None, None, "", str(uuid.uuid4())
+        new_chat_btn.click(
+            new_chat,
+            inputs=[],
+            outputs=[chat_out, markdown_out, image_out, gallery_out, profile_out, products_out, video_in, audio_in, text_in, thread_id_state]
         )
     return demo
 

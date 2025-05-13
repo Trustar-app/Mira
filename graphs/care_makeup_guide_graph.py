@@ -63,4 +63,5 @@ def summary_node(state):
     :param state: 当前 State
     :return: (新 State, 反馈消息)
     """
-```
+
+care_makeup_guide_graph = build_care_makeup_guide_graph()

@@ -41,3 +41,5 @@ def node_result_feedback(state):
     :return: (新 State, 反馈消息)
     """
     # 生成个性化解读，更新 analysis_report/progress
+
+skin_analysis_graph = build_skincare_graph()

@@ -66,16 +66,15 @@ class UserProfileEditState(BaseModel):
 
     progress: Optional[str] = None
     error: Optional[str] = None
-    internal: Optional[Dict[str, Any]] = None
 
-def user_profile_reducer(state: UserProfileState, update: dict) -> UserProfileState:
+def user_profile_reducer(state: UserProfileEditState, update: dict) -> UserProfileEditState:
     """
     合并节点输出到当前 State，返回新 State。
-    :param state: 当前 UserProfileState
+    :param state: 当前 UserProfileEditState
     :param update: 节点返回的 dict
-    :return: 新 UserProfileState
+    :return: 新 UserProfileEditState
     """
-    return state.copy(update=update)
+    return state.model_copy(update=update)
 
 
 class CareMakeupGuideState(BaseModel):
@@ -107,7 +106,6 @@ class ProductRecognitionState(BaseModel):
     # 用户输入
     user_profile: Optional[Dict[str, Any]] = None  # 共享字段
     user_video: Optional[str] = None         # 用户上传的视频路径
-    user_image: Optional[str] = None         # 用户上传的产品图片路径
     user_text: Optional[str] = None          # 用户输入的产品名称/条码等文本
 
     # 中间产物
@@ -161,14 +159,6 @@ def product_recommendation_reducer(state: ProductRecommendationState, update: di
 
 # 主图与子图 State 映射示例
 def call_skincare_subgraph(state: MiraState):
-    skincare_input = {
-        "user_profile": state.user_profile,
-        "user_video": state.skincare_input.get("user_video") if state.skincare_input else None,
-        "user_text": state.skincare_input.get("user_text") if state.skincare_input else None,
-        "user_audio": state.skincare_input.get("user_audio") if state.skincare_input else None,
-    }
-    skincare_output = skincare_subgraph.invoke(skincare_input)
-    return {"skincare_result": skincare_output}def call_skincare_subgraph(state: MiraState):
     skincare_input = {
         "user_profile": state.user_profile,
         "user_video": state.skincare_input.get("user_video") if state.skincare_input else None,

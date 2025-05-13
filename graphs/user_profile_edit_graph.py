@@ -42,3 +42,5 @@ def save_node(state):
     :return: (新 State, 进度消息)
     """
     # setattr(state, state.edit_field, state.edit_value)
+
+user_profile_edit_graph = build_user_profile_edit_graph()
