@@ -1,31 +1,44 @@
 from state import MiraState
+import base64
+import mimetypes
+from langchain_core.messages import HumanMessage
 
-def frontend_inputs_to_state(video, audio, text, chat=None):
+def format_messages(video, audio, text, multimodal_text):
     """
-    将前端输入(video, audio, text, chat)转换为 MiraState
+    将前端输入(video, audio, text)转换为 OpenAI 格式 messages
     """
-    
-    # 解析 chat 历史
-    messages = chat if chat else []
-    if text:
-        messages.append({"role": "user", "content": text})
-    if audio:
-        messages.append({"role": "user", "content": audio})
+    """messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "请帮我做一个肤质检测"},
+                {"type": "video_url", "video_url": {"url": f"data:{mime_type};base64,{video_b64}"}}
+            ]
+        }
+    ]"""
+
     if video:
-        messages.append({"role": "user", "content": video})
+        with open(video, "rb") as f:
+            video_bytes = f.read()
+        video_b64 = base64.b64encode(video_bytes).decode("utf-8")
+        mime_type, _ = mimetypes.guess_type(video)
+        messages = [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": multimodal_text},
+                    {"type": "video_url", "video_url": {"url": f"data:{mime_type};base64,{video_b64}"}}
+                ]
+            )
+        ]
+    else:
+        messages = [
+            HumanMessage(
+                content=[{"type": "text", "text": multimodal_text}]
+            )
+        ]
+    return messages
 
-    # 构造 MiraState
-    state = MiraState(
-        user_text=text,
-        user_audio=audio,
-        user_video=video,
-        messages=messages
-        # 其他字段可按需补充
-    )
-    return state
-
-
-def state_to_frontend_outputs(state):
+def structure_to_frontend_outputs(state):
     """
     将任意 State 转换为前端所需的 (chat, markdown, image, gallery, profile, products, ...)
     """
@@ -59,3 +72,41 @@ def state_to_frontend_outputs(state):
     # ...其他流程...
 
     return chat, markdown, image, gallery, profile, products, None, None, ""
+
+def format_skin_check(skin_result):
+    """
+    格式化肤质检测结果
+    """
+    pass
+
+
+def format_product_recommendation(products):
+    """
+    格式化产品推荐结果
+    """
+    pass
+
+def format_makeup_steps(steps):
+    """
+    格式化化妆/护肤引导步骤
+    """
+    pass
+
+def format_product_recognition(product_info):
+    """
+    格式化产品识别结果
+    """
+    pass
+
+def format_profile(profile):
+    """
+    格式化用户档案
+    """
+    pass
+
+def format_care_makeup_guide(steps):
+    """
+    格式化化妆/护肤引导步骤
+    """
+    pass
+

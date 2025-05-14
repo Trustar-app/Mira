@@ -1,11 +1,6 @@
 __pycache__/config.cpython-311.pyc
 .cursor/rules/mira.mdc
 .vscode/launch.json
-design/graph.md
-design/langSmith.md
-design/project.md
-design/skin_detect.md
-design/test.md
 design/workflows/graph.py
 design/workflows/handlers.py
 design/workflows/intent_router.py

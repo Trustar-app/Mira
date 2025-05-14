@@ -5,123 +5,82 @@ import logging
 from langgraph.graph import StateGraph, END, START
 from langgraph.types import interrupt
 from state import UserProfileEditState
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage
-
-# 明确 user_profile 结构
-USER_PROFILE_FIELDS = [
-    "name", "gender", "age", "create_time",
-    "face_features", "skin_color", "skin_quality", "last_skin_check",
-    "makeup_skill_level", "skincare_skill_level", "user_preferences"
-]
-
-llm = ChatOpenAI(model="qwen2.5-vl-72b-instruct", streaming=True)
+from langgraph.config import get_stream_writer
+from tools.user_profile_creation_tools import analyze_face_features_with_llm
 
 # 1. 性别选择节点
-def gender_selection_node(state: UserProfileEditState, stream_writer=None):
+def gender_selection_node(state: UserProfileEditState):
     logging.info("[gender_selection_node] called")
-    gender = state.user_profile.get("gender") if state.user_profile else None
-    if not gender:
-        msg = "请选择你的性别（男/女/其他）。"
-        return interrupt(msg)
+    response = interrupt({"type": "interrupt", "content": "请选择你的性别。"})
     # 写入 state
-    state.user_profile = dict(state.user_profile or {})
-    state.user_profile["gender"] = gender
+    state["user_profile"] = dict(state["user_profile"] or {})
+    state["user_profile"]["gender"] = response
     return state
 
 # 2. 年龄输入节点
-def age_input_node(state: UserProfileEditState, stream_writer=None):
+def age_input_node(state: UserProfileEditState):
     logging.info("[age_input_node] called")
-    age = state.user_profile.get("age") if state.user_profile else None
-    if not age:
-        msg = "请输入你的年龄。"
-        return interrupt(msg)
-    state.user_profile = dict(state.user_profile or {})
-    state.user_profile["age"] = age
+    response = interrupt({"type": "interrupt", "content": "请输入你的年龄。"})
+    # 写入 state
+    state["user_profile"] = dict(state["user_profile"] or {})
+    state["user_profile"]["age"] = response
     return state
 
 # 3. 面部特征采集与分析节点（用 LLM 分析视频）
-def face_feature_analysis_node(state: UserProfileEditState, stream_writer=None):
+def face_feature_analysis_node(state: UserProfileEditState):
     logging.info("[face_feature_analysis_node] called")
-    video_path = state.user_profile.get("face_video") if state.user_profile else None
-    if not video_path:
-        msg = "请上传面部视频以采集五官特征、肤色和肤质。"
-        return interrupt(msg)
-    # 用 LLM 分析视频（假设视频已转为 base64 或路径可直接用）
-    prompt = f"请分析用户上传的面部视频，提取五官特征、肤色、肤质，输出JSON，字段包括face_features, skin_color, skin_quality。视频路径：{video_path}"
-    messages = [HumanMessage(content=prompt)]
-    result = ""
-    if stream_writer:
-        stream_writer({"progress": "正在分析面部特征..."})
-    for chunk in llm.stream(messages):
-        if hasattr(chunk, 'content') and chunk.content:
-            result += chunk.content
-            if stream_writer:
-                stream_writer({"messages": chunk.content})
-    # 简单解析（实际应用中应做更严格的JSON解析）
-    import json
-    try:
-        features = json.loads(result)
-    except Exception:
-        msg = "面部分析失败，请重新上传视频。"
-        return interrupt(msg)
-    state.user_profile = dict(state.user_profile or {})
-    state.user_profile["face_features"] = features.get("face_features")
-    state.user_profile["skin_color"] = features.get("skin_color")
-    state.user_profile["skin_quality"] = features.get("skin_quality")
+    response = interrupt({"type": "interrupt", "content": "请上传面部视频以采集五官特征、肤色、肤质。"})
+    while "video" not in response:
+        response = interrupt({"type": "interrupt", "content": "请上传面部视频以采集五官特征、肤色、肤质。"})
+    video_path = response['video']
+    # 工具调用：分析面部特征
+    features = analyze_face_features_with_llm(video_path)
+    state["user_profile"] = dict(state["user_profile"] or {})
+    state["user_profile"]["face_features"] = features.get("face_features")
+    state["user_profile"]["skin_color"] = features.get("skin_color")
+    state["user_profile"]["skin_quality"] = features.get("skin_quality")
     return state
 
 # 4. 化妆专业度打分节点
-def makeup_skill_node(state: UserProfileEditState, stream_writer=None):
+def makeup_skill_node(state: UserProfileEditState):
     logging.info("[makeup_skill_node] called")
-    makeup_skill = state.user_profile.get("makeup_skill_level") if state.user_profile else None
-    if makeup_skill is None:
-        msg = "请给你的化妆专业度打分（0-10分）。"
-        return interrupt(msg)
-    state.user_profile = dict(state.user_profile or {})
-    state.user_profile["makeup_skill_level"] = makeup_skill
+    response = interrupt({"type": "interrupt", "content": "请给你的化妆专业度打分（0-10分）。"})
+    state["user_profile"] = dict(state["user_profile"] or {})
+    state["user_profile"]["makeup_skill_level"] = response
     return state
 
 # 5. 护肤专业度打分节点
-def skincare_skill_node(state: UserProfileEditState, stream_writer=None):
+def skincare_skill_node(state: UserProfileEditState):
     logging.info("[skincare_skill_node] called")
-    skincare_skill = state.user_profile.get("skincare_skill_level") if state.user_profile else None
-    if skincare_skill is None:
-        msg = "请给你的护肤专业度打分（0-10分）。"
-        return interrupt(msg)
-    state.user_profile = dict(state.user_profile or {})
-    state.user_profile["skincare_skill_level"] = skincare_skill
+    response = interrupt({"type": "interrupt", "content": "请给你的护肤专业度打分（0-10分）。"})
+    state["user_profile"] = dict(state["user_profile"] or {})
+    state["user_profile"]["skincare_skill_level"] = response
     return state
 
 # 6. 个人诉求与偏好收集节点
-def user_preferences_node(state: UserProfileEditState, stream_writer=None):
+def user_preferences_node(state: UserProfileEditState):
     logging.info("[user_preferences_node] called")
-    preferences = state.user_profile.get("user_preferences") if state.user_profile else None
-    if not preferences:
-        msg = "请分享你在护肤和化妆中的诉求或偏好。"
-        return interrupt(msg)
-    state.user_profile = dict(state.user_profile or {})
-    state.user_profile["user_preferences"] = preferences
+    response = interrupt({"type": "interrupt", "content": "请分享你在护肤和化妆中的诉求或偏好。"})
+    state["user_profile"] = dict(state["user_profile"] or {})
+    state["user_profile"]["user_preferences"] = response
     return state
 
 # 7. 用户名采集节点
-def name_input_node(state: UserProfileEditState, stream_writer=None):
+def name_input_node(state: UserProfileEditState):
     logging.info("[name_input_node] called")
-    name = state.user_profile.get("name") if state.user_profile else None
-    if not name:
-        msg = "请告诉我你的名字。"
-        return interrupt(msg)
-    state.user_profile = dict(state.user_profile or {})
-    state.user_profile["name"] = name
+    response = interrupt({"type": "interrupt", "content": "请告诉我你的名字。"})
+    state["user_profile"] = dict(state["user_profile"] or {})
+    state["user_profile"]["name"] = response
     return state
 
 # 8. 档案生成与保存节点
-def profile_generate_node(state: UserProfileEditState, stream_writer=None):
+def profile_generate_node(state: UserProfileEditState):
     logging.info("[profile_generate_node] called")
+    writer = get_stream_writer()
     # 汇总所有信息，生成档案
-    msg = f"用户档案已生成：{state.user_profile}"
-    if stream_writer:
-        stream_writer({"progress": msg})
+    msg = f"用户档案已生成：{state['user_profile']}"
+    writer({"type": "progress", "content": msg})
+    writer({"type": "structure", "content": state["user_profile"]})
     return state
 
 # 构建子流程 Graph

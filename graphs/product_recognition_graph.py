@@ -7,10 +7,13 @@ from langchain.schema import SystemMessage, HumanMessage
 from langgraph.graph import StateGraph, END, START
 from langgraph.types import interrupt
 from state import ProductRecognitionState
+from config import OPENAI_API_BASE, OPENAI_API_KEY
 
 # 工具模型实例
 llm_tool = ChatOpenAI(
     model="qwen2.5-vl-72b-instruct",
+    openai_api_base=OPENAI_API_BASE,
+    openai_api_key=OPENAI_API_KEY,
     streaming=True
 )
 
@@ -111,16 +114,16 @@ def build_product_graph():
     :return: LangGraph Subgraph 实例
     """
     graph = StateGraph(ProductRecognitionState)
-    graph.add_node("input_collection", input_collection_node)
-    graph.add_node("product_info_extraction", product_info_extraction_node)
-    graph.add_node("product_info_search", product_info_search_node)
-    graph.add_node("product_analysis", product_analysis_node)
+    graph.add_node("input_collection_node", input_collection_node)
+    graph.add_node("product_info_extraction_node", product_info_extraction_node)
+    graph.add_node("product_info_search_node", product_info_search_node)
+    graph.add_node("product_analysis_node", product_analysis_node)
     # 边：input->info_extraction->info_search->analysis->END
-    graph.add_edge("input_collection", "product_info_extraction")
-    graph.add_edge("product_info_extraction", "product_info_search")
-    graph.add_edge("product_info_search", "product_analysis")
-    graph.add_edge("product_analysis", END)
-    graph.add_edge(START, "input_collection")
+    graph.add_edge("input_collection_node", "product_info_extraction_node")
+    graph.add_edge("product_info_extraction_node", "product_info_search_node")
+    graph.add_edge("product_info_search_node", "product_analysis_node")
+    graph.add_edge("product_analysis_node", END)
+    graph.add_edge(START, "input_collection_node")
     return graph.compile()
 
 product_recognition_graph = build_product_graph()
