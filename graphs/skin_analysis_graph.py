@@ -2,6 +2,7 @@
 肤质检测子流程 Graph，节点实现如下。
 """
 import logging
+import json
 from langgraph.graph import StateGraph, END, START
 from state import SkinAnalysisState
 from langgraph.config import get_stream_writer
@@ -18,7 +19,7 @@ def wait_for_video_node(state: SkinAnalysisState):
     # 检查 user_video，若无则返回 progress/error
     # 若有则返回 {"progress": "收到视频，准备分析", ...}
     MiraLog("skin_analysis", f"进入肤质检测子图")
-    
+
     if not state.get("current_video"):
         response = interrupt({"type": "interrupt", "content": "请上传面部视频以进行肤质检测。"})
         state["current_video"] = response
@@ -35,7 +36,7 @@ def video_analysis_node(state: SkinAnalysisState):
     logging.info("[video_analysis_node] called")
     writer = get_stream_writer()
     # mock: 实际应调用 extract_best_face_frame 工具
-    state["best_face_image"] = "mock_face_image.jpg"
+    state["best_face_image"] = "mockdata/肤质检测.png"
     state["face_detected"] = True
     writer({"type": "progress", "content": "已提取最佳人脸图片，准备分析肤质..."})
     return state
@@ -51,7 +52,7 @@ def node_skin_analysis(state: SkinAnalysisState):
     logging.info("[node_skin_analysis] called")
     writer = get_stream_writer()
     # mock: 实际应调用 skin_quality_analysis 工具
-    state["skin_analysis_result"] = {"moisture": 80, "oiliness": 30, "wrinkle": 10}
+    state["skin_analysis_result"] = json.dumps({"moisture": 80, "oiliness": 30, "wrinkle": 10})
     writer({"type": "progress", "content": f"肤质分析结果：{state['skin_analysis_result']}"})
     return state
 
@@ -68,7 +69,7 @@ def node_result_feedback(state: SkinAnalysisState):
     writer = get_stream_writer()
     # mock: 实际应调用 generate_skin_analysis_report 工具
     state["analysis_report"] = "你的皮肤水润，油脂分泌适中，细纹较少。"
-    writer({"type": "structure", "content": state["analysis_report"]})
+    writer({"type": "structure", "content": state})
     return state
 
 def build_skincare_graph():

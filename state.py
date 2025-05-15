@@ -29,6 +29,8 @@ class SkinAnalysisState(TypedDict, total=False):
     # 中间产物
     best_face_image: Optional[str]   # 最佳脸部图片路径
     face_detected: Optional[bool]    # 是否检测到人脸
+    skin_analysis_result: Optional[str]   # JSON字符串形式的肤质分析结果
+    analysis_report: Optional[str]        # AI生成的个性化解读
 
 
 class UserProfileEditState(TypedDict, total=False):

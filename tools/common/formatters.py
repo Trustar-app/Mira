@@ -2,6 +2,9 @@ from state import MiraState
 import base64
 import mimetypes
 from langchain_core.messages import HumanMessage
+from utils.loggers import MiraLog
+import os
+from PIL import Image
 
 def format_messages(video, audio, text, multimodal_text):
     """
@@ -52,10 +55,9 @@ def structure_to_frontend_outputs(state):
     products = []
 
     # 针对不同 State 类型做分派
-    if hasattr(state, "skin_analysis_result"):
+    if state["analysis_report"] is not None:
         # 肤质检测流程
-        skin_result = getattr(state, "skin_analysis_result", None) or {}
-        formatted = format_skin_check(skin_result)
+        formatted = format_skin_check(state)
         markdown = formatted["markdown"]
         image = formatted["image"]
         gallery = formatted["gallery"]
@@ -73,11 +75,36 @@ def structure_to_frontend_outputs(state):
 
     return chat, markdown, image, gallery, profile, products, None, None, ""
 
-def format_skin_check(skin_result):
+def format_skin_check(skin_state):
     """
     格式化肤质检测结果
     """
-    pass
+    skin_result_dict = {}
+    # 修改这一行
+    skin_result_dict["chat"] = [{"role": "assistant", "content": skin_state["analysis_report"]}]
+    skin_result_dict["markdown"] = skin_state["skin_analysis_result"]
+    image = skin_state["best_face_image"]
+    if image.startswith("mockdata/"):
+        # 模拟数据，从项目根目录读取图片
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        image_path = os.path.join(project_root, image)
+        
+        # 确认文件存在
+        if os.path.exists(image_path):
+            # 读取图片数据
+            img = Image.open(image_path)
+            skin_result_dict["image"] = img
+        else:
+            MiraLog('app', f"模拟图片文件不存在: {image_path}")
+    else:  
+        skin_result_dict["image"] = image
+
+    skin_result_dict["gallery"] = []
+    skin_result_dict["profile"] = ""
+    skin_result_dict["products"] = []
+
+    return skin_result_dict
+
 
 
 def format_product_recommendation(products):
