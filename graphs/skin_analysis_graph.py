@@ -6,6 +6,7 @@ from langgraph.graph import StateGraph, END, START
 from state import SkinAnalysisState
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
+from utils.loggers import MiraLog
 
 # 1. 输入采集节点
 def wait_for_video_node(state: SkinAnalysisState):
@@ -16,7 +17,8 @@ def wait_for_video_node(state: SkinAnalysisState):
     """
     # 检查 user_video，若无则返回 progress/error
     # 若有则返回 {"progress": "收到视频，准备分析", ...}
-    logging.info("[wait_for_video_node] called")
+    MiraLog("skin_analysis", f"进入肤质检测子图")
+    
     if not state.get("current_video"):
         response = interrupt({"type": "interrupt", "content": "请上传面部视频以进行肤质检测。"})
         state["current_video"] = response

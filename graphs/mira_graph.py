@@ -11,6 +11,7 @@ from graphs.skin_analysis_graph import skin_analysis_graph
 from graphs.product_recognition_graph import product_recognition_graph
 from graphs.product_recommend_graph import product_recommend_graph
 from graphs.care_makeup_guide_graph import care_makeup_guide_graph
+from utils.loggers import MiraLog
 
 # 1. 多模态意图识别与流程调度节点
 def mira(state: MiraState):
@@ -20,6 +21,8 @@ def mira(state: MiraState):
     writer = get_stream_writer()
     writer({"type": "progress", "content": "正在识别意图..."})
     intent = recognize_intent(state["multimodal_text"])
+    MiraLog("mira_graph", f"意图识别结果: {intent}")
+    
     if intent == "创建用户档案":
         return Command(goto="user_profile_creation_subgraph")
     elif intent == "档案编辑":
@@ -61,7 +64,7 @@ def build_main_graph():
         "product_recommend_subgraph",
         "care_makeup_guide_subgraph"
     ]:
-        graph.add_edge(subgraph_name, "mira")
+        graph.add_edge(subgraph_name, END)
     graph.add_edge("mira", END)
 
     memory = MemorySaver()
