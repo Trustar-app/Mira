@@ -9,6 +9,7 @@ LOGGERS = {
         "file": True,             # 是否输出到文件
         "file_path": "logs/app.log",  # 日志文件路径
         "format": "[%(asctime)s][%(name)s][%(funcName)s %(lineno)d] %(message)s",  # 日志格式
+        "clear_log": True,  # 启动时清空日志文件
         "propagate": False        # 是否传播到父级日志器
     },
     
@@ -19,6 +20,7 @@ LOGGERS = {
         "file": True,
         "file_path": "logs/mira_graph.log",
         "format": "[%(asctime)s][%(name)s][%(funcName)s %(lineno)d] %(message)s",  # 日志格式
+        "clear_log": True,  # 启动时清空日志文件
         "propagate": False        # 是否传播到父级日志器
     },
 
@@ -29,6 +31,7 @@ LOGGERS = {
         "file": True,
         "file_path": "logs/skin_analysis.log",
         "format": "[%(asctime)s][%(name)s][%(funcName)s %(lineno)d] %(message)s",  # 日志格式
+        "clear_log": True,  # 启动时清空日志文件
         "propagate": False        # 是否传播到父级日志器
     },
     

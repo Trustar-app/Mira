@@ -11,7 +11,8 @@ def setup_logger(
     file_output: bool = False,
     file_path: Optional[str] = None,
     format_str: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    propagate: bool = False
+    propagate: bool = False,
+    clear_existing_log: bool = False
 ) -> logging.Logger:
     """
     创建并配置一个日志器
@@ -24,6 +25,7 @@ def setup_logger(
         file_path: 日志文件路径，如果为None且file_output为True，则使用logs/{name}.log
         format_str: 日志格式字符串
         propagate: 是否传播日志到父级日志器
+        clear_existing_log: 是否清空现有日志文件
         
     Returns:
         配置好的日志器实例
@@ -57,6 +59,11 @@ def setup_logger(
             # 确保logs目录存在
             os.makedirs("logs", exist_ok=True)
             file_path = f"logs/{name}.log"
+        
+        # 如果需要清空日志文件
+        if clear_existing_log and os.path.exists(file_path):
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(f"--- 日志重置于 {logging.Formatter().formatTime(logging.LogRecord('', 0, '', 0, '', None, None))} ---\n")
         
         file_handler = logging.FileHandler(file_path, encoding='utf-8')
         file_handler.setFormatter(formatter)
@@ -93,6 +100,7 @@ def setup_loggers_from_config(config) -> Dict[str, logging.Logger]:
         file_path = logger_config.get("file_path", None)
         format_str = logger_config.get("format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         propagate = logger_config.get("propagate", False)
+        clear_log = logger_config.get("clear_log", True)
         
         loggers[name] = setup_logger(
             name=name,
@@ -101,7 +109,8 @@ def setup_loggers_from_config(config) -> Dict[str, logging.Logger]:
             file_output=file,
             file_path=file_path,
             format_str=format_str,
-            propagate=propagate
+            propagate=propagate,
+            clear_existing_log=clear_log
         )
     
     return loggers
@@ -139,17 +148,55 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def MiraLog(logger_name: str, msg: str = "", log_level: str = "DEBUG"):
-    """ 默认是输出 DEBUG 级别的日志 """
+    """ 
+    默认输出DEBUG级别的日志，正确显示调用者的函数名和行号
+    """
     logger = get_logger(logger_name)
+    
+    # fix: 处理 MiraLog 的 funcname 和 lineno 等信息不符合预期的问题
     if log_level == "INFO":
-        logger.info(msg)
+        logger.info(msg, stacklevel=2)
     elif log_level == "DEBUG":
-        logger.debug(msg)
+        logger.debug(msg, stacklevel=2)
     elif log_level == "WARNING":
-        logger.warning(msg)
+        logger.warning(msg, stacklevel=2)
     elif log_level == "ERROR":
-        logger.error(msg)
+        logger.error(msg, stacklevel=2)
     elif log_level == "CRITICAL":
-        logger.critical(msg)
+        logger.critical(msg, stacklevel=2)
     else:
-        logger.info(msg)
+        logger.info(msg, stacklevel=2)
+
+
+
+# def MiraLog(logger_name: str, msg: str = "", log_level: str = "DEBUG"):
+#     """ python < 3.8 版本使用这个实现 """
+#     import inspect
+
+#     logger = get_logger(logger_name)
+    
+#     # 获取调用者的栈帧信息
+#     caller = inspect.currentframe().f_back
+#     filename = caller.f_code.co_filename
+#     lineno = caller.f_lineno
+#     func_name = caller.f_code.co_name
+    
+#     # 创建带有正确位置信息的记录
+#     extra = {
+#         'funcName': func_name,
+#         'pathname': filename,
+#         'lineno': lineno
+#     }
+    
+#     if log_level == "INFO":
+#         logger.info(msg, extra=extra)
+#     elif log_level == "DEBUG":
+#         logger.debug(msg, extra=extra)
+#     elif log_level == "WARNING":
+#         logger.warning(msg, extra=extra)
+#     elif log_level == "ERROR":
+#         logger.error(msg, extra=extra)
+#     elif log_level == "CRITICAL":
+#         logger.critical(msg, extra=extra)
+#     else:
+#         logger.info(msg, extra=extra)
