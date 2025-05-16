@@ -1,0 +1,40 @@
+{
+  "pore": {
+    "raw_score": 99.9246597290039,
+    "ui_score": 99,
+    "output_mask_name": "pore_output.png"
+  },
+  "radiance": {
+    "raw_score": 86.28530502319336,
+    "ui_score": 83,
+    "output_mask_name": "radiance_output.png"
+  },
+  "wrinkle": {
+    "raw_score": 94.23676133155823,
+    "ui_score": 88,
+    "output_mask_name": "wrinkle_output.png"
+  },
+  "texture": {
+    "raw_score": 98.89315366744995,
+    "ui_score": 97,
+    "output_mask_name": "texture_output.png"
+  },
+  "acne": {
+    "raw_score": 91.13199,
+    "ui_score": 87,
+    "output_mask_name": "acne_output.png"
+  },
+  "oiliness": {
+    "raw_score": 100.0,
+    "ui_score": 99,
+    "output_mask_name": "oiliness_output.png"
+  },
+  "dark_circle_v2": {
+    "raw_score": 82.11368322372437,
+    "ui_score": 77,
+    "output_mask_name": "dark_circle_v2_output.png"
+  },
+  "all": {
+    "score": 90.0
+  }
+}

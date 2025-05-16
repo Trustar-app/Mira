@@ -1,6 +1,7 @@
 """
 肤质检测子流程 Graph，节点实现如下。
 """
+import base64
 import logging
 import json
 from langgraph.graph import StateGraph, END, START
@@ -8,6 +9,7 @@ from state import SkinAnalysisState
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from utils.loggers import MiraLog
+from tools.skin_analysis_tools import extract_best_face_frame, skin_analysis, skin_feedback
 
 # 1. 输入采集节点
 def wait_for_video_node(state: SkinAnalysisState):
@@ -36,9 +38,22 @@ def video_analysis_node(state: SkinAnalysisState):
     logging.info("[video_analysis_node] called")
     writer = get_stream_writer()
     # mock: 实际应调用 extract_best_face_frame 工具
-    state["best_face_image"] = "mockdata/肤质检测.png"
-    state["face_detected"] = True
-    writer({"type": "progress", "content": "已提取最佳人脸图片，准备分析肤质..."})
+    best_face_image = extract_best_face_frame(state["current_video"])
+    if best_face_image:
+        state["best_face_image"] = best_face_image
+        state["face_detected"] = True
+        writer({"type": "progress", "content": "已提取最佳人脸图片，准备分析肤质..."})
+
+        ## TODO 保存 best_face_image（base64）到本地
+        try:
+            with open("/Users/yuanxinyu/workspace/Mira/best_face.jpg", "wb") as f:
+                f.write(base64.b64decode(best_face_image))
+        except Exception as e:
+            MiraLog("skin_analysis", f"修改一下保存路径: {e}")
+
+    else:
+        response = interrupt({"type": "interrupt", "content": "未检测到人脸，请重新输入视频。"})
+        state["current_video"] = response
     return state
 
 # 3. 肤质AI检测节点
@@ -51,8 +66,12 @@ def node_skin_analysis(state: SkinAnalysisState):
     # 调用肤质分析模型，更新 skin_analysis_result/analysis_report
     logging.info("[node_skin_analysis] called")
     writer = get_stream_writer()
-    # mock: 实际应调用 skin_quality_analysis 工具
-    state["skin_analysis_result"] = json.dumps({"moisture": 80, "oiliness": 30, "wrinkle": 10})
+    image_base64 = state["best_face_image"]
+    skin_analysis_result = skin_analysis(image_base64)
+    if type(skin_analysis_result) == dict:
+        state["skin_analysis_result"] = json.dumps(skin_analysis_result)
+    else:
+        state["skin_analysis_result"] = skin_analysis_result
     writer({"type": "progress", "content": f"肤质分析结果：{state['skin_analysis_result']}"})
     return state
 
@@ -68,7 +87,8 @@ def node_result_feedback(state: SkinAnalysisState):
     logging.info("[node_result_feedback] called")
     writer = get_stream_writer()
     # mock: 实际应调用 generate_skin_analysis_report 工具
-    state["analysis_report"] = "你的皮肤水润，油脂分泌适中，细纹较少。"
+    analysis_report = skin_feedback(state["skin_analysis_result"])
+    state["analysis_report"] = analysis_report
     writer({"type": "structure", "content": state})
     return state
 
