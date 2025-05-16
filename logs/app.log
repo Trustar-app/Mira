@@ -1,0 +1,24 @@
+[2025-05-16 00:20:13,840][app][MiraLog 147] msg_type: progress
+[2025-05-16 00:20:14,852][app][MiraLog 147] msg_type: progress
+[2025-05-16 00:20:14,915][app][MiraLog 147] msg_type: progress
+[2025-05-16 00:20:14,963][app][MiraLog 147] msg_type: structure
+[2025-05-16 00:23:18,251][app][MiraLog 147] msg_type: progress
+[2025-05-16 00:23:19,211][app][MiraLog 147] msg_type: progress
+[2025-05-16 00:23:19,270][app][MiraLog 147] msg_type: progress
+[2025-05-16 00:23:19,319][app][MiraLog 147] msg_type: structure
+[2025-05-16 00:23:19,319][app][MiraLog 147] chat: ['你', '的', '皮', '肤', '水', '润', '，', '油', '脂', '分', '泌', '适', '中', '，', '细', '纹', '较', '少', '。']
+[2025-05-16 00:23:19,319][app][MiraLog 147] markdown: {"moisture": 80, "oiliness": 30, "wrinkle": 10}
+[2025-05-16 00:23:19,319][app][MiraLog 147] image: <PIL.PngImagePlugin.PngImageFile image mode=RGBA size=1298x1268 at 0x121C39F10>
+[2025-05-16 00:23:19,319][app][MiraLog 147] gallery: []
+[2025-05-16 00:23:19,319][app][MiraLog 147] profile: None
+[2025-05-16 00:23:19,319][app][MiraLog 147] products: []
+[2025-05-16 00:25:36,136][app][MiraLog 147] msg_type: progress
+[2025-05-16 00:25:36,740][app][MiraLog 147] msg_type: progress
+[2025-05-16 00:25:36,799][app][MiraLog 147] msg_type: progress
+[2025-05-16 00:25:36,846][app][MiraLog 147] msg_type: structure
+[2025-05-16 00:25:36,846][app][MiraLog 147] chat: [{'role': 'assistant', 'content': '你的皮肤水润，油脂分泌适中，细纹较少。'}]
+[2025-05-16 00:25:36,846][app][MiraLog 147] markdown: {"moisture": 80, "oiliness": 30, "wrinkle": 10}
+[2025-05-16 00:25:36,846][app][MiraLog 147] image: <PIL.PngImagePlugin.PngImageFile image mode=RGBA size=1298x1268 at 0x11C23AFC0>
+[2025-05-16 00:25:36,846][app][MiraLog 147] gallery: []
+[2025-05-16 00:25:36,846][app][MiraLog 147] profile: None
+[2025-05-16 00:25:36,846][app][MiraLog 147] products: []

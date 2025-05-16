@@ -6,7 +6,7 @@ from tools.common.formatters import (
 from tools.common.utils import audio_to_text, video_to_text
 import gradio as gr
 from langgraph.types import Command
-import logging
+from utils.loggers import MiraLog
 import uuid
 
 def process_user_input(video, audio, text, chat=None, thread_id=None, resume=None):
@@ -73,6 +73,8 @@ def process_user_input(video, audio, text, chat=None, thread_id=None, resume=Non
         # 兼容自定义输出结构
         msg_type = step.get("type")
         content = step.get("content")
+        MiraLog("app", f"msg_type: {msg_type}")
+        
         if msg_type == "progress":
             # 进度信息，chat区只保留一条最新assistant进度
             if chat and chat[-1].get("role") == "assistant":
@@ -97,7 +99,13 @@ def process_user_input(video, audio, text, chat=None, thread_id=None, resume=Non
             markdown, image, gallery, profile, products = "", None, [], "", []
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, None
         elif msg_type == "structure":
-            markdown, image, gallery, profile, products = structure_to_frontend_outputs(content)
+            chat, markdown, image, gallery, profile, products, a, b, c = structure_to_frontend_outputs(content)
+            MiraLog("app", f"chat: {chat}")
+            MiraLog("app", f"markdown: {markdown}")
+            MiraLog("app", f"image: {image}")
+            MiraLog("app", f"gallery: {gallery}")
+            MiraLog("app", f"profile: {profile}")
+            MiraLog("app", f"products: {products}")
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, None
         else:
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, None
