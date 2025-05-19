@@ -1,14 +1,18 @@
 """
 肤质检测子流程 Graph，节点实现如下。
 """
+import os
+import base64
 import logging
 import json
+from pathlib import Path
 from langgraph.graph import StateGraph, END, START
 from state import SkinAnalysisState
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from utils.loggers import MiraLog
-
+from tools.skin_analysis_tools import extract_best_face_frame, skin_analysis, skin_feedback, skin_analysis_by_QwenYi
+from config import USE_YOUCAM_API
 # 1. 输入采集节点
 def wait_for_video_node(state: SkinAnalysisState):
     """
@@ -19,10 +23,23 @@ def wait_for_video_node(state: SkinAnalysisState):
     # 检查 user_video，若无则返回 progress/error
     # 若有则返回 {"progress": "收到视频，准备分析", ...}
     MiraLog("skin_analysis", f"进入肤质检测子图")
+    video = state["current_video"]
 
-    if not state.get("current_video"):
+    # 将video转成base64
+    if video and os.path.exists(video):
+        try:
+            with open(video, "rb") as video_file:
+                video_bytes = video_file.read()
+                video_base64 = base64.b64encode(video_bytes).decode('utf-8')
+                state["current_video_base64"] = video_base64
+                MiraLog("skin_analysis", f"视频转换为base64成功，路径: {video}, 转换后长度: {len(video_base64)}")
+        except Exception as e:
+            MiraLog("skin_analysis", f"视频转换为base64失败: {e}", "ERROR")
+    else:
+        MiraLog("skin_analysis", f"肤质检测的视频输入不存在: {video}")
         response = interrupt({"type": "interrupt", "content": "请上传面部视频以进行肤质检测。"})
         state["current_video"] = response
+
     return state
 
 # 2. 视频分析节点
@@ -36,9 +53,25 @@ def video_analysis_node(state: SkinAnalysisState):
     logging.info("[video_analysis_node] called")
     writer = get_stream_writer()
     # mock: 实际应调用 extract_best_face_frame 工具
-    state["best_face_image"] = "mockdata/肤质检测.png"
-    state["face_detected"] = True
-    writer({"type": "progress", "content": "已提取最佳人脸图片，准备分析肤质..."})
+    best_face_image = extract_best_face_frame(state["current_video_base64"])
+    if best_face_image:
+        state["best_face_image"] = best_face_image
+        state["face_detected"] = True
+        writer({"type": "progress", "content": "已提取最佳人脸图片，准备分析肤质..."})
+
+        try:
+            save_path = Path(__file__).parent.parent / "runtime_data" / "skin_analysis" / "best_face_frame.jpg"
+            if not save_path.parent.exists():
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(save_path, "wb") as f:
+                f.write(base64.b64decode(best_face_image))
+            MiraLog("skin_analysis", f"保存最佳人脸图片成功，路径: {save_path}")
+        except Exception as e:
+            MiraLog("skin_analysis", f"保存最佳人脸图片失败: {e}")
+    else:
+        # TODO 这里的中断并非幂等，需要修改
+        response = interrupt({"type": "interrupt", "content": "未检测到人脸，请重新输入视频。"})
+        state["current_video"] = response
     return state
 
 # 3. 肤质AI检测节点
@@ -51,8 +84,17 @@ def node_skin_analysis(state: SkinAnalysisState):
     # 调用肤质分析模型，更新 skin_analysis_result/analysis_report
     logging.info("[node_skin_analysis] called")
     writer = get_stream_writer()
-    # mock: 实际应调用 skin_quality_analysis 工具
-    state["skin_analysis_result"] = json.dumps({"moisture": 80, "oiliness": 30, "wrinkle": 10})
+    image_base64 = state["best_face_image"]
+
+    if USE_YOUCAM_API:
+        skin_analysis_result = skin_analysis(image_base64)
+    else:
+        skin_analysis_result = skin_analysis_by_QwenYi(image_base64)
+
+    if type(skin_analysis_result) == dict:
+        state["skin_analysis_result"] = json.dumps(skin_analysis_result)
+    else:
+        state["skin_analysis_result"] = skin_analysis_result
     writer({"type": "progress", "content": f"肤质分析结果：{state['skin_analysis_result']}"})
     return state
 
@@ -68,7 +110,8 @@ def node_result_feedback(state: SkinAnalysisState):
     logging.info("[node_result_feedback] called")
     writer = get_stream_writer()
     # mock: 实际应调用 generate_skin_analysis_report 工具
-    state["analysis_report"] = "你的皮肤水润，油脂分泌适中，细纹较少。"
+    analysis_report = skin_feedback(state["skin_analysis_result"])
+    state["analysis_report"] = analysis_report
     writer({"type": "structure", "content": state})
     return state
 

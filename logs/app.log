@@ -1,18 +1,23 @@
---- 日志重置于 2025-05-16 14:29:42,468 ---
-[2025-05-16 14:29:42,468][app][process_user_input 76] msg_type: progress
-[2025-05-16 14:29:43,964][app][process_user_input 76] msg_type: chat
-[2025-05-16 14:29:43,979][app][process_user_input 76] msg_type: chat
-[2025-05-16 14:29:43,994][app][process_user_input 76] msg_type: chat
-[2025-05-16 14:29:44,070][app][process_user_input 76] msg_type: chat
-[2025-05-16 14:29:44,161][app][process_user_input 76] msg_type: chat
-[2025-05-16 14:29:44,260][app][process_user_input 76] msg_type: chat
-[2025-05-16 14:30:07,472][app][process_user_input 76] msg_type: progress
-[2025-05-16 14:30:08,072][app][process_user_input 76] msg_type: progress
-[2025-05-16 14:30:08,135][app][process_user_input 76] msg_type: progress
-[2025-05-16 14:30:08,183][app][process_user_input 76] msg_type: structure
-[2025-05-16 14:30:08,184][app][process_user_input 103] chat: [{'role': 'assistant', 'content': '你的皮肤水润，油脂分泌适中，细纹较少。'}]
-[2025-05-16 14:30:08,185][app][process_user_input 104] markdown: {"moisture": 80, "oiliness": 30, "wrinkle": 10}
-[2025-05-16 14:30:08,185][app][process_user_input 105] image: <PIL.PngImagePlugin.PngImageFile image mode=RGBA size=1298x1268 at 0x1070FEF60>
-[2025-05-16 14:30:08,185][app][process_user_input 106] gallery: []
-[2025-05-16 14:30:08,185][app][process_user_input 107] profile: None
-[2025-05-16 14:30:08,185][app][process_user_input 108] products: []
+--- 日志重置于 2025-05-19 17:17:04,033 ---
+[2025-05-19 17:17:04,034][app][process_user_input 80] msg_type: progress
+[2025-05-19 17:17:05,208][app][process_user_input 80] msg_type: progress
+[2025-05-19 17:17:08,745][app][process_user_input 80] msg_type: progress
+[2025-05-19 17:17:15,471][app][process_user_input 80] msg_type: structure
+[2025-05-19 17:17:15,474][app][process_user_input 107] chat: [{'role': 'assistant', 'content': '1. 检测完成提示：已完成肤质检测，具体信息可以查看肤质检测结果。\n\n2. 肤质分析说明：你的黑眼圈和眼袋为轻度，保持早睡早起的好习惯会有所帮助。斑点和痘痘处于中等水平，需要注意日常的清洁与护理。皮肤紧致度良好，但毛孔、出油情况显示你属于混合性肤质，需要特别注意控油和保湿的平衡。\n\n3. 情感反馈：别担心，每个人的皮肤都有自己的特点，坚持正确的护肤步骤，你的肌肤会越来越好！\n\n4. 下一步建议：和Mira说说你最关心的肤质问题是什么吧，我们一起制定最适合你的护肤方案！'}]
+[2025-05-19 17:17:15,474][app][process_user_input 108] markdown: {
+  "斑点": 7,
+  "皱纹": 2,
+  "毛孔": 5,
+  "发红": 3,
+  "出油": 4,
+  "痘痘": 6,
+  "黑眼圈": 2,
+  "眼袋": 1,
+  "泪沟": 1,
+  "皮肤紧致度": 6,
+  "肤质类型": "混合性"
+}
+[2025-05-19 17:17:15,474][app][process_user_input 109] image: <PIL.JpegImagePlugin.JpegImageFile image mode=RGB size=1920x1440 at 0x16FA573B0>
+[2025-05-19 17:17:15,475][app][process_user_input 110] gallery: []
+[2025-05-19 17:17:15,475][app][process_user_input 111] profile: None
+[2025-05-19 17:17:15,475][app][process_user_input 112] products: []

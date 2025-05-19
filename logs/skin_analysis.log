@@ -1,2 +1,42 @@
---- 日志重置于 2025-05-16 14:29:42,468 ---
-[2025-05-16 14:30:08,069][skin_analysis][wait_for_video_node 21] 进入肤质检测子图
+--- 日志重置于 2025-05-19 17:17:04,034 ---
+[2025-05-19 17:17:04,746][skin_analysis][wait_for_video_node 25] 进入肤质检测子图
+[2025-05-19 17:17:04,748][skin_analysis][wait_for_video_node 35] 视频转换为base64成功，路径: /private/var/folders/hv/qzzznccs10bbwqtdhf7_9vbh0000gn/T/gradio/7f69d5e925ca0134a37d00205104ecfc2b6b78709931ace896db9670ace3e1c1/sample_flip.webm, 转换后长度: 813692
+[2025-05-19 17:17:04,748][skin_analysis][extract_best_face_frame 362] [extract_best_face_frame] 接收到base64视频数据，长度: 813692
+[2025-05-19 17:17:04,831][skin_analysis][extract_best_face_frame 404] [extract_best_face_frame] 采样到关键帧数: 1
+[2025-05-19 17:17:05,187][skin_analysis][extract_best_face_frame 420] [extract_best_face_frame] 第1帧检测到人脸数: 1
+[2025-05-19 17:17:05,187][skin_analysis][extract_best_face_frame 430] [extract_best_face_frame] 第1帧关键点数: 5, 置信度: 0.8299483060836792
+[2025-05-19 17:17:05,192][skin_analysis][extract_best_face_frame 448] [extract_best_face_frame] 已选取最佳帧，关键点数: 5, 置信度: 0.8299483060836792
+[2025-05-19 17:17:05,209][skin_analysis][video_analysis_node 68] 保存最佳人脸图片成功，路径: /Users/yuanxinyu/workspace/Mira/runtime_data/skin_analysis/best_face_frame.jpg
+[2025-05-19 17:17:08,743][skin_analysis][skin_analysis_by_QwenYi 499] [skin_feedback] 反馈内容: {
+  "斑点": 7,
+  "皱纹": 2,
+  "毛孔": 5,
+  "发红": 3,
+  "出油": 4,
+  "痘痘": 6,
+  "黑眼圈": 2,
+  "眼袋": 1,
+  "泪沟": 1,
+  "皮肤紧致度": 6,
+  "肤质类型": "混合性"
+}
+[2025-05-19 17:17:08,746][skin_analysis][skin_feedback 334] [skin_feedback] 生成反馈，输入数据: {
+  "斑点": 7,
+  "皱纹": 2,
+  "毛孔": 5,
+  "发红": 3,
+  "出油": 4,
+  "痘痘": 6,
+  "黑眼圈": 2,
+  "眼袋": 1,
+  "泪沟": 1,
+  "皮肤紧致度": 6,
+  "肤质类型": "混合性"
+}
+[2025-05-19 17:17:15,467][skin_analysis][skin_feedback 351] [skin_feedback] 反馈内容: 1. 检测完成提示：已完成肤质检测，具体信息可以查看肤质检测结果。
+
+2. 肤质分析说明：你的黑眼圈和眼袋为轻度，保持早睡早起的好习惯会有所帮助。斑点和痘痘处于中等水平，需要注意日常的清洁与护理。皮肤紧致度良好，但毛孔、出油情况显示你属于混合性肤质，需要特别注意控油和保湿的平衡。
+
+3. 情感反馈：别担心，每个人的皮肤都有自己的特点，坚持正确的护肤步骤，你的肌肤会越来越好！
+
+4. 下一步建议：和Mira说说你最关心的肤质问题是什么吧，我们一起制定最适合你的护肤方案！

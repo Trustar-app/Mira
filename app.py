@@ -8,8 +8,9 @@ import gradio as gr
 from langgraph.types import Command
 from utils.loggers import MiraLog
 import uuid
+import os
 
-def process_user_input(video, audio, text, chat=None, thread_id=None, resume=None):
+def process_user_input(video: str, audio, text, chat=None, thread_id=None, resume=None):
     """
     支持多轮对话记忆，thread_id用于区分不同会话。
     兼容mira_graph.stream自定义输出结构{"type": , "content": ...}
@@ -53,6 +54,9 @@ def process_user_input(video, audio, text, chat=None, thread_id=None, resume=Non
         multimodal_text += video_to_text(video)
     
     config = {"configurable": {"thread_id": thread_id}}
+
+
+
     if resume:
         resume = None
         inputs = Command(

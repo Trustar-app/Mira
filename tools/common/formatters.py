@@ -21,9 +21,7 @@ def format_messages(video, audio, text, multimodal_text):
     ]"""
 
     if video:
-        with open(video, "rb") as f:
-            video_bytes = f.read()
-        video_b64 = base64.b64encode(video_bytes).decode("utf-8")
+        video_b64 = video
         mime_type, _ = mimetypes.guess_type(video)
         messages = [
             HumanMessage(
@@ -97,7 +95,29 @@ def format_skin_check(skin_state):
         else:
             MiraLog('app', f"模拟图片文件不存在: {image_path}")
     else:  
-        skin_result_dict["image"] = image
+        try:
+            import base64
+            from PIL import Image
+            import io
+            
+            # 处理base64前缀
+            if "base64," in image:
+                image = image.split("base64,")[1]
+            
+            # 处理填充
+            missing_padding = len(image) % 4
+            if missing_padding:
+                image += "=" * (4 - missing_padding)
+            
+            # 解码并转换为PIL Image
+            image_data = base64.b64decode(image)
+            pil_image = Image.open(io.BytesIO(image_data))
+            
+            # 保存为PIL图像对象
+            skin_result_dict["image"] = pil_image
+        except Exception as e:
+            MiraLog('app', f"将base64转换为PIL图像时出错: {e}")
+            skin_result_dict["image"] = None
 
     skin_result_dict["gallery"] = []
     skin_result_dict["profile"] = ""
