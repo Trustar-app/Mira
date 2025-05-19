@@ -9,11 +9,14 @@ class MiraState(TypedDict, total=False):
     user_profile: Optional[Dict[str, Any]]      # 用户档案
     products_directory: Optional[Dict[str, Any]]  # 用户自有产品目录
     messages: Annotated[List[AnyMessage], add_messages]    # 全局消息历史
+    resume: Optional[bool]    # 是否是中断后的回复
 
     current_text: Optional[str]
     current_audio: Optional[str]
     current_video: Optional[str]
     multimodal_text: Optional[str]
+
+    current_flow: Optional[str]
 
 
 class SkinAnalysisState(TypedDict, total=False):
@@ -32,6 +35,8 @@ class SkinAnalysisState(TypedDict, total=False):
     skin_analysis_result: Optional[str]   # JSON字符串形式的肤质分析结果
     analysis_report: Optional[str]        # AI生成的个性化解读
 
+    current_flow: Optional[str]
+
 
 class UserProfileEditState(TypedDict, total=False):
     user_profile: Optional[Dict[str, Any]]
@@ -42,6 +47,8 @@ class UserProfileEditState(TypedDict, total=False):
     current_audio: Optional[str]
     current_video: Optional[str]
     multimodal_text: Optional[str]
+
+    current_flow: Optional[str]
 
 
 class CareMakeupGuideState(TypedDict, total=False):
@@ -59,6 +66,8 @@ class CareMakeupGuideState(TypedDict, total=False):
     current_step_index: Optional[int]
     current_step_feedback: Optional[str]
 
+    current_flow: Optional[str]
+
 
 class ProductRecognitionState(TypedDict, total=False):
     user_profile: Optional[Dict[str, Any]]
@@ -73,6 +82,8 @@ class ProductRecognitionState(TypedDict, total=False):
     # 中间产物
     product_raw_info: Optional[Dict[str, Any]]   # AI识别出的原始产品信息（如品牌、品名、条码等）
     product_structured_info: Optional[Dict[str, Any]]  # 网络检索到的结构化产品信息
+
+    current_flow: Optional[str]
 
 
 class ProductRecommendationState(TypedDict, total=False):
@@ -92,3 +103,5 @@ class ProductRecommendationState(TypedDict, total=False):
     # 推荐结果
     recommended_products: Optional[List[Dict[str, Any]]]  # 推荐产品列表
     personalized_reasons: Optional[List[str]]             # 个性化推荐理由
+
+    current_flow: Optional[str]

@@ -34,8 +34,20 @@ LOGGERS = {
         "clear_log": True,  # 启动时清空日志文件
         "propagate": False        # 是否传播到父级日志器
     },
+
+    # 用户建档模块日志
+    "user_profile_creation": {
+        "level": "DEBUG",         
+        "console": True,
+        "file": True,
+        "file_path": "logs/user_profile_creation.log",
+        "format": "[%(asctime)s][%(name)s][%(funcName)s %(lineno)d] %(message)s",  # 日志格式
+        "clear_log": True,  # 启动时清空日志文件
+        "propagate": False        # 是否传播到父级日志器
+    },
     
     # 其他模块日志配置
+    
 }
 
 # 配置模型名、API key、模型输入类型等

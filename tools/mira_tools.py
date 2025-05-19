@@ -74,3 +74,31 @@ def recognize_intent(text: str) -> str:
             return cat
     return "聊天互动"
 
+def recognize_intent_with_current_flow(text: str, current_flow: str) -> str:
+    """
+    用 LLM 根据当前用户输入文本和历史意图，判断是否需要继续当前意图，还是需要切换到其他意图。
+    """
+    prompt = f"""
+    你是一个智能助手，请根据当前用户输入文本和历史意图，判断是否需要继续当前意图，还是需要切换到其他意图，意图类别如下：
+    {INTENT_CATEGORIES}
+    要求：
+    - 只有当用户输入内容非常明确、直接地表达了某个具体意图（如“请帮我做肤质检测”、“我要创建个人档案”等），才切换到其他意图类别。
+    - 如果用户输入模糊、带有疑问、犹豫、否定、复合、闲聊、无关、或无法确定意图，请直接返回“继续”，不要切换到其他意图类别。
+    当前用户输入文本：{text}
+    当前意图：{current_flow}
+    请直接输出“继续”或其他意图类别。
+    """
+    llm = ChatOpenAI(
+        openai_api_key=OPENAI_API_KEY,
+        openai_api_base=OPENAI_API_BASE,
+        model="qwen2.5-14b-instruct"
+    )
+    result = llm.invoke([HumanMessage(content=prompt)])
+    intent = result.content.strip()
+    if intent in INTENT_CATEGORIES:
+        return intent
+    else:
+        return current_flow
+
+
+

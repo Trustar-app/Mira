@@ -54,23 +54,39 @@ def process_user_input(video, audio, text, chat=None, thread_id=None, resume=Non
     
     config = {"configurable": {"thread_id": thread_id}}
     if resume:
-        inputs = Command(resume={
-            "text": text,
-            "audio": audio,
-            "video": video,
-            "multimodal_text": multimodal_text,
-            "messages": format_messages(video, audio, text, multimodal_text)
-        })
+        resume = None
+        inputs = Command(
+            resume=multimodal_text,
+            update={
+                "current_text": text,
+                "current_audio": audio,
+                "current_video": video,
+                "multimodal_text": multimodal_text,
+                "resume": True
+            }
+        )
     else:
         inputs = {
             "current_text": text,
             "current_audio": audio,
             "current_video": video,
             "multimodal_text": multimodal_text,
-            "messages": format_messages(video, audio, text, multimodal_text)
+            "messages": format_messages(video, audio, text, multimodal_text),
+            "resume": False
         }
-    for step in mira_graph.stream(inputs, config, stream_mode="custom"):
-        # 兼容自定义输出结构
+    for mode, step in mira_graph.stream(inputs, config, stream_mode=["custom", "updates"]):
+        if mode == "updates" and not "__interrupt__" in step:
+            continue
+        if "__interrupt__" in step:
+            content = step.get("__interrupt__")[0].value.get("content")
+            # 中断信息，chat区只保留一条最新assistant进度
+            if chat and chat[-1].get("role") == "assistant":
+                chat[-1]["content"] = content
+            else:
+                chat.append({"role": "assistant", "content": content})
+            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, "interrupt"
+            break
+
         msg_type = step.get("type")
         content = step.get("content")
         MiraLog("app", f"msg_type: {msg_type}")
@@ -82,14 +98,7 @@ def process_user_input(video, audio, text, chat=None, thread_id=None, resume=Non
             else:
                 chat.append({"role": "assistant", "content": content})
             markdown, image, gallery, profile, products = "", None, [], "", []
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, None
-        elif msg_type == "interrupt":
-            # 中断信息，chat区只保留一条最新assistant进度
-            if chat and chat[-1].get("role") == "assistant":
-                chat[-1]["content"] = content
-            else:
-                chat.append({"role": "assistant", "content": content})
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, "interrupt"
+            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume            
         elif msg_type == "chat":
             # 流式chat输出，上一条是assistant则替换，否则append
             if chat and chat[-1].get("role") == "assistant":
@@ -97,7 +106,7 @@ def process_user_input(video, audio, text, chat=None, thread_id=None, resume=Non
             else:
                 chat.append({"role": "assistant", "content": content})
             markdown, image, gallery, profile, products = "", None, [], "", []
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, None
+            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
         elif msg_type == "structure":
             chat, markdown, image, gallery, profile, products, a, b, c = structure_to_frontend_outputs(content)
             MiraLog("app", f"chat: {chat}")
@@ -106,9 +115,9 @@ def process_user_input(video, audio, text, chat=None, thread_id=None, resume=Non
             MiraLog("app", f"gallery: {gallery}")
             MiraLog("app", f"profile: {profile}")
             MiraLog("app", f"products: {products}")
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, None
+            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
         else:
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, None
+            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
 
 def build_demo():
     with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {background: #f8f9fa;} .title {font-size:2.2em;font-weight:bold;color:#d63384;margin-bottom:0.2em;} .subtitle{color:#868e96;}") as demo:
