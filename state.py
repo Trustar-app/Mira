@@ -25,6 +25,7 @@ class SkinAnalysisState(TypedDict, total=False):
     current_audio: Optional[str]
     current_video: Optional[str]
     multimodal_text: Optional[str]
+    current_video_base64: Optional[str]
 
     # 中间产物
     best_face_image: Optional[str]   # 最佳脸部图片路径

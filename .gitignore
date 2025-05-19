@@ -12,4 +12,4 @@ design/workflows/__pycache__/skin_check_graph.cpython-311.pyc
 
 .venv/
 .pytest_cache/
-
+.idea/

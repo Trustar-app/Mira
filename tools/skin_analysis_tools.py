@@ -7,7 +7,9 @@ import cv2
 import os
 import requests
 import json
-from config import YOUCAM_API_KEY, YOUCAM_SECRET_KEY
+from config import YOUCAM_API_KEY, YOUCAM_SECRET_KEY, OPENAI_API_BASE, OPENAI_API_KEY
+from langchain_openai import ChatOpenAI
+from langchain.schema import SystemMessage, HumanMessage
 from utils.loggers import MiraLog
 import base64
 import io
@@ -15,6 +17,55 @@ import tempfile
 import time
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+
+def get_access_token():
+    """
+    获取YouCam API的access_token。
+    :return: access_token（str）
+    """
+    # 替换为实际 client_id 和 client_secret
+    client_id = YOUCAM_API_KEY
+    client_secret_pem = f"""-----BEGIN PUBLIC KEY-----
+    {YOUCAM_SECRET_KEY}
+    -----END PUBLIC KEY-----"""
+
+    # 1. 构造待加密的字符串
+    timestamp = str(int(time.time() * 1000))  # 当前时间戳（毫秒）
+    message = f"client_id={client_id}&timestamp={timestamp}".encode('utf-8')
+
+    # 2. 加载公钥
+    public_key = serialization.load_pem_public_key(client_secret_pem.encode('utf-8'))
+
+    # 3. 使用公钥加密
+    encrypted = public_key.encrypt(
+        message,
+        padding.PKCS1v15()
+    )
+
+    # 4. 对加密结果进行 Base64 编码，得到 id_token
+    id_token = base64.b64encode(encrypted).decode('utf-8')
+
+    # 5. 构造认证请求
+    url = "https://yce-api-01.perfectcorp.com/s2s/v1.0/client/auth"
+    headers = {
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "client_id": client_id,
+        "id_token": id_token
+    }
+
+    # 6. 发送 POST 请求获取 access_token
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code == 200:
+        access_token = response.json()["result"]["access_token"]
+        MiraLog("skin_analysis", f"[get_access_token] 获取access_token成功: {access_token}")
+        return access_token
+    else:
+        MiraLog("skin_analysis", f"[get_access_token] 获取access_token失败: {response.text}", "ERROR")
+        return None
+
+
 
 # YouCam肤质分析API封装
 def upload_image_for_skin_analysis(image_bytes, access_token):
@@ -280,11 +331,7 @@ def skin_feedback(data):
     :param data: 肤质分析原始结果
     :return: 反馈文本（str）
     """
-    from config import OPENAI_API_KEY, OPENAI_API_BASE
-    from langchain_openai import ChatOpenAI
-    from langchain.schema import SystemMessage, HumanMessage
-
-    logging.info(f"[skin_feedback] 生成反馈，输入数据: {data}")
+    MiraLog("skin_analysis", f"[skin_feedback] 生成反馈，输入数据: {data}")
     SYSTEM_PROMPT = (
         "你是一个专业的皮肤健康顾问，请根据用户的肤质检测结果，生成如下内容：\n"
         "1. 检测完成提示（如：已完成肤质检测，具体信息可以查看肤质检测结果）\n"
@@ -301,7 +348,8 @@ def skin_feedback(data):
         HumanMessage(content="请生成反馈")
     ]
     feedback = llm.invoke(messages).content.strip()
-    logging.info(f"[skin_feedback] 反馈内容: {feedback}")
+    MiraLog("skin_analysis", f"[skin_feedback] 反馈内容: {feedback}")
+
     return feedback 
 
 def extract_best_face_frame(video_base64):
@@ -414,50 +462,40 @@ def extract_best_face_frame(video_base64):
             except:
                 pass 
 
-def get_access_token():
+def skin_analysis_by_QwenYi(image_base64):
     """
-    获取YouCam API的access_token。
-    :return: access_token（str）
+    调用 QwenYi API 进行肤质分析。
+    :param image_base64: base64编码的图像数据字符串
+    :return: 原始分析结果，异常时抛出异常或返回 None
     """
-    # 替换为实际 client_id 和 client_secret
-    client_id = YOUCAM_API_KEY
-    client_secret_pem = f"""-----BEGIN PUBLIC KEY-----
-    {YOUCAM_SECRET_KEY}
-    -----END PUBLIC KEY-----"""
-
-    # 1. 构造待加密的字符串
-    timestamp = str(int(time.time() * 1000))  # 当前时间戳（毫秒）
-    message = f"client_id={client_id}&timestamp={timestamp}".encode('utf-8')
-
-    # 2. 加载公钥
-    public_key = serialization.load_pem_public_key(client_secret_pem.encode('utf-8'))
-
-    # 3. 使用公钥加密
-    encrypted = public_key.encrypt(
-        message,
-        padding.PKCS1v15()
+    SYSTEM_PROMPT = (
+        "你是一个专业的皮肤健康检测人员，请根据用户的照片检测结果，生成一个json形式的肤质检测结果。\n"
+        "针对：斑点、皱纹、毛孔、发红、出油、痘痘、黑眼圈、眼袋、泪沟、皮肤紧致度 这10个维度，给出评分（0～10分，0分表示没有，10分表示非常严重）\n"
+        "针对：肤质类型 给出类型（油性，干性，中性，混合性）\n"
+        "请用json格式输出，不要输出任何解释。\n"
     )
 
-    # 4. 对加密结果进行 Base64 编码，得到 id_token
-    id_token = base64.b64encode(encrypted).decode('utf-8')
+    # 创建图文输入 message
+    image_data_url = f"data:image/jpeg;base64,{image_base64}"
+    image_message = HumanMessage(content=[
+        {
+            "type": "image_url",
+            "image_url": {
+                "url": image_data_url,
+            }
+        }
+    ])
 
-    # 5. 构造认证请求
-    url = "https://yce-api-01.perfectcorp.com/s2s/v1.0/client/auth"
-    headers = {
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "client_id": client_id,
-        "id_token": id_token
-    }
+    llm = ChatOpenAI(model_name="qwen2.5-vl-72b-instruct", temperature=0, openai_api_key=OPENAI_API_KEY, openai_api_base=OPENAI_API_BASE)
+    messages = [
+        SystemMessage(content=SYSTEM_PROMPT),
+        image_message
+    ]
+    feedback = llm.invoke(messages).content.strip()
+    # 反馈信息如果是 ```json 开头，则去掉 ```json 和 ```
+    if feedback.startswith("```json"):
+        feedback = feedback[len("```json"):].strip()
+        feedback = feedback[:feedback.rfind("```")].strip()
+    MiraLog("skin_analysis", f"[skin_feedback] 反馈内容: {feedback}")
 
-    # 6. 发送 POST 请求获取 access_token
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code == 200:
-        access_token = response.json()["result"]["access_token"]
-        MiraLog("skin_analysis", f"[get_access_token] 获取access_token成功: {access_token}")
-        return access_token
-    else:
-        MiraLog("skin_analysis", f"[get_access_token] 获取access_token失败: {response.text}", "ERROR")
-        return None
-
+    return feedback 

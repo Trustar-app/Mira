@@ -10,7 +10,7 @@ from utils.loggers import MiraLog
 import uuid
 import os
 
-def process_user_input(video, audio, text, chat=None, thread_id=None, resume=None):
+def process_user_input(video: str, audio, text, chat=None, thread_id=None, resume=None):
     """
     支持多轮对话记忆，thread_id用于区分不同会话。
     兼容mira_graph.stream自定义输出结构{"type": , "content": ...}
@@ -55,35 +55,23 @@ def process_user_input(video, audio, text, chat=None, thread_id=None, resume=Non
     
     config = {"configurable": {"thread_id": thread_id}}
 
-    # 将video转成base64
-    if video and os.path.exists(video):
-        import base64
-        try:
-            with open(video, "rb") as video_file:
-                video_bytes = video_file.read()
-                video_base64 = base64.b64encode(video_bytes).decode('utf-8')
-                MiraLog("app", f"视频转换为base64成功，路径: {video}, 转换后长度: {len(video_base64)}")
-        except Exception as e:
-            MiraLog("app", f"视频转换为base64失败: {e}", "ERROR")
-            video_base64 = None
-    else:
-        video_base64 = None
+
 
     if resume:
         inputs = Command(resume={
             "text": text,
             "audio": audio,
-            "video": video_base64,
+            "video": video,
             "multimodal_text": multimodal_text,
-            "messages": format_messages(video_base64, audio, text, multimodal_text)
+            "messages": format_messages(video, audio, text, multimodal_text)
         })
     else:
         inputs = {
             "current_text": text,
             "current_audio": audio,
-            "current_video": video_base64,
+            "current_video": video,
             "multimodal_text": multimodal_text,
-            "messages": format_messages(video_base64, audio, text, multimodal_text)
+            "messages": format_messages(video, audio, text, multimodal_text)
         }
     for step in mira_graph.stream(inputs, config, stream_mode="custom"):
         # 兼容自定义输出结构
