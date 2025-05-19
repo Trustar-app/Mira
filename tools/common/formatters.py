@@ -10,33 +10,56 @@ def format_messages(video, audio, text, multimodal_text):
     """
     将前端输入(video, audio, text)转换为 OpenAI 格式 messages
     """
-    """messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "请帮我做一个肤质检测"},
-                {"type": "video_url", "video_url": {"url": f"data:{mime_type};base64,{video_b64}"}}
+    messages = []
+    
+    # 处理文本
+    if text:
+        messages.append({"type": "text", "text": text})
+    
+    # 处理视频
+    if video and isinstance(video, str) and os.path.exists(video):
+        try:
+            # 读取视频文件并转换为base64
+            with open(video, "rb") as video_file:
+                video_base64 = base64.b64encode(video_file.read()).decode("utf-8")
+            
+            # 构建符合API要求的消息格式
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "video_url",
+                            "video_url": {
+                                "url": f"data:video/mp4;base64,{video_base64}"
+                            }
+                        }
+                    ]
+                }
             ]
-        }
-    ]"""
-
-    if video:
-        video_b64 = video
-        mime_type, _ = mimetypes.guess_type(video)
-        messages = [
-            HumanMessage(
-                content=[
-                    {"type": "text", "text": multimodal_text},
-                    {"type": "video_url", "video_url": {"url": f"data:{mime_type};base64,{video_b64}"}}
-                ]
-            )
-        ]
-    else:
-        messages = [
-            HumanMessage(
-                content=[{"type": "text", "text": multimodal_text}]
-            )
-        ]
+            
+            # 如果有文本内容，添加到content列表中
+            if multimodal_text:
+                messages[0]["content"].append({
+                    "type": "text",
+                    "text": multimodal_text
+                })
+            
+        except Exception as e:
+            MiraLog("formatters", f"处理视频数据时出错: {e}", "ERROR")
+            if multimodal_text:
+                messages = [{
+                    "role": "user",
+                    "content": [{"type": "text", "text": multimodal_text}]
+                }]
+    
+    # 如果没有视频，只有文本
+    elif multimodal_text:
+        messages = [{
+            "role": "user",
+            "content": [{"type": "text", "text": multimodal_text}]
+        }]
+    
     return messages
 
 def structure_to_frontend_outputs(state):
