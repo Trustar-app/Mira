@@ -22,6 +22,3 @@ logs/skin_analysis.log
 tools/common/__pycache__/formatters.cpython-311.pyc
 utils/__pycache__/loggers.cpython-311.pyc
 draft.py
-
-.pytest_cache/
-.idea/
