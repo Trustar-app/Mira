@@ -9,9 +9,9 @@ design/workflows/__pycache__/graph.cpython-311.pyc
 design/workflows/__pycache__/handlers.cpython-311.pyc
 design/workflows/__pycache__/intent_router.cpython-311.pyc
 design/workflows/__pycache__/skin_check_graph.cpython-311.pyc
+
 .venv/
-.pytest_cache/
-.idea/
+
 __pycache__/app.cpython-311-pytest-8.3.5.pyc
 __pycache__/state.cpython-311.pyc
 graphs/__pycache__/mira_graph.cpython-311.pyc
@@ -22,3 +22,6 @@ logs/skin_analysis.log
 tools/common/__pycache__/formatters.cpython-311.pyc
 utils/__pycache__/loggers.cpython-311.pyc
 draft.py
+
+.pytest_cache/
+.idea/
