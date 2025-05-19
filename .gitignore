@@ -19,6 +19,7 @@ graphs/__pycache__/skin_analysis_graph.cpython-311.pyc
 logs/app.log
 logs/mira_graph.log
 logs/skin_analysis.log
+logs/*
 tools/common/__pycache__/formatters.cpython-311.pyc
 utils/__pycache__/loggers.cpython-311.pyc
 draft.py
