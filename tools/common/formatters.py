@@ -76,7 +76,7 @@ def structure_to_frontend_outputs(state):
     products = []
 
     # 针对不同 State 类型做分派
-    if state["analysis_report"] is not None:
+    if hasattr(state, "analysis_report"):
         # 肤质检测流程
         formatted = format_skin_check(state)
         markdown = formatted["markdown"]
@@ -147,36 +147,3 @@ def format_skin_check(skin_state):
     skin_result_dict["products"] = []
 
     return skin_result_dict
-
-
-
-def format_product_recommendation(products):
-    """
-    格式化产品推荐结果
-    """
-    pass
-
-def format_makeup_steps(steps):
-    """
-    格式化化妆/护肤引导步骤
-    """
-    pass
-
-def format_product_recognition(product_info):
-    """
-    格式化产品识别结果
-    """
-    pass
-
-def format_profile(profile):
-    """
-    格式化用户档案
-    """
-    pass
-
-def format_care_makeup_guide(steps):
-    """
-    格式化化妆/护肤引导步骤
-    """
-    pass
-

@@ -4,10 +4,20 @@ State 结构、reducer、schema 定义，支持主流程与各子流程状态管
 from typing import Optional, Dict, Any, List, TypedDict, Annotated
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
+
+def dict_merge_reducer(old, new):
+    if old is None:
+        old = {}
+    if new is None:
+        new = {}
+    merged = {**old, **new}
+    return merged
+
+
 class MiraState(TypedDict, total=False):
     # 全局信息
-    user_profile: Optional[Dict[str, Any]]      # 用户档案
-    products_directory: Optional[Dict[str, Any]]  # 用户自有产品目录
+    user_profile: Annotated[Dict[str, Any], dict_merge_reducer]      # 用户档案
+    products_directory: Annotated[Dict[str, Any], dict_merge_reducer]  # 用户自有产品目录
     messages: Annotated[List[AnyMessage], add_messages]    # 全局消息历史
     resume: Optional[bool]    # 是否是中断后的回复
 
@@ -20,8 +30,8 @@ class MiraState(TypedDict, total=False):
 
 
 class SkinAnalysisState(TypedDict, total=False):
-    user_profile: Optional[Dict[str, Any]]
-    products_directory: Optional[Dict[str, Any]]
+    user_profile: Annotated[Dict[str, Any], dict_merge_reducer]
+    products_directory: Annotated[Dict[str, Any], dict_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
 
     current_text: Optional[str]
@@ -40,8 +50,8 @@ class SkinAnalysisState(TypedDict, total=False):
 
 
 class UserProfileEditState(TypedDict, total=False):
-    user_profile: Optional[Dict[str, Any]]
-    products_directory: Optional[Dict[str, Any]]
+    user_profile: Annotated[Dict[str, Any], dict_merge_reducer]
+    products_directory: Annotated[Dict[str, Any], dict_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
 
     current_text: Optional[str]
@@ -53,8 +63,8 @@ class UserProfileEditState(TypedDict, total=False):
 
 
 class CareMakeupGuideState(TypedDict, total=False):
-    user_profile: Optional[Dict[str, Any]]
-    products_directory: Optional[Dict[str, Any]]
+    user_profile: Annotated[Dict[str, Any], dict_merge_reducer]
+    products_directory: Annotated[Dict[str, Any], dict_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
 
     current_text: Optional[str]
@@ -71,8 +81,8 @@ class CareMakeupGuideState(TypedDict, total=False):
 
 
 class ProductRecognitionState(TypedDict, total=False):
-    user_profile: Optional[Dict[str, Any]]
-    products_directory: Optional[Dict[str, Any]]
+    user_profile: Annotated[Dict[str, Any], dict_merge_reducer]
+    products_directory: Annotated[Dict[str, Any], dict_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
 
     current_text: Optional[str]
@@ -88,8 +98,8 @@ class ProductRecognitionState(TypedDict, total=False):
 
 
 class ProductRecommendationState(TypedDict, total=False):
-    user_profile: Optional[Dict[str, Any]]
-    products_directory: Optional[Dict[str, Any]]
+    user_profile: Annotated[Dict[str, Any], dict_merge_reducer]
+    products_directory: Annotated[Dict[str, Any], dict_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
 
     current_text: Optional[str]

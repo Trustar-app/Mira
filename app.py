@@ -60,7 +60,7 @@ def process_user_input(video: str, audio, text, chat=None, thread_id=None, resum
     if resume:
         resume = None
         inputs = Command(
-            resume=multimodal_text,
+            resume={"text": multimodal_text, "audio": audio, "video": video},
             update={
                 "current_text": text,
                 "current_audio": audio,
