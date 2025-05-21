@@ -10,6 +10,14 @@ from utils.loggers import MiraLog
 import uuid
 import os
 
+def append_assistant_chat(chat, msg):
+    if chat and chat[-1].get("type") == "progress":
+        chat[-1]["content"] = msg["content"]
+        chat[-1]["type"] = msg["type"]
+    else:
+        chat.append({"role": "assistant", "content": msg["content"], "type": msg["type"]})
+    return chat
+
 def process_user_input(video: str, audio, text, chat=None, thread_id=None, resume=None):
     """
     支持多轮对话记忆，thread_id用于区分不同会话。
@@ -25,11 +33,11 @@ def process_user_input(video: str, audio, text, chat=None, thread_id=None, resum
         chat = []
     # 用户输入加入chat
     if text:
-        chat.append({"role": "user", "content": text})
+        chat.append({"role": "user", "content": text, "type": "final"})
     if audio:
-        chat.append({"role": "user", "content": gr.Audio(audio)})
+        chat.append({"role": "user", "content": gr.Audio(audio), "type": "final"})
     if video:
-        chat.append({"role": "user", "content": gr.Video(video)})
+        chat.append({"role": "user", "content": gr.Video(video), "type": "final"})
     yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
 
     # 多模态信息处理
@@ -38,24 +46,16 @@ def process_user_input(video: str, audio, text, chat=None, thread_id=None, resum
         multimodal_text += text
     if audio:
         progress_message = "正在处理语音输入..."
-        if chat and chat[-1].get("role") == "assistant":
-            chat[-1]["content"] = progress_message
-        else:
-            chat.append({"role": "assistant", "content": progress_message})
+        chat = append_assistant_chat(chat, {"content": progress_message, "type": "progress"})
         yield chat, markdown, image, gallery, profile, products, progress_message, None, "", thread_id, resume
         multimodal_text += audio_to_text(audio)
     if video:
         progress_message = "正在处理视频输入..."
-        if chat and chat[-1].get("role") == "assistant":
-            chat[-1]["content"] = progress_message
-        else:
-            chat.append({"role": "assistant", "content": progress_message})
+        chat = append_assistant_chat(chat, {"content": progress_message, "type": "progress"})
         yield chat, markdown, image, gallery, profile, products, progress_message, None, "", thread_id, resume
         multimodal_text += video_to_text(video)
     
     config = {"configurable": {"thread_id": thread_id}}
-
-
 
     if resume:
         resume = None
@@ -84,10 +84,7 @@ def process_user_input(video: str, audio, text, chat=None, thread_id=None, resum
         if "__interrupt__" in step:
             content = step.get("__interrupt__")[0].value.get("content")
             # 中断信息，chat区只保留一条最新assistant进度
-            if chat and chat[-1].get("role") == "assistant":
-                chat[-1]["content"] = content
-            else:
-                chat.append({"role": "assistant", "content": content})
+            chat = append_assistant_chat(chat, {"content": content, "type": "final"})
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, "interrupt"
             break
 
@@ -97,28 +94,18 @@ def process_user_input(video: str, audio, text, chat=None, thread_id=None, resum
         
         if msg_type == "progress":
             # 进度信息，chat区只保留一条最新assistant进度
-            if chat and chat[-1].get("role") == "assistant":
-                chat[-1]["content"] = content
-            else:
-                chat.append({"role": "assistant", "content": content})
+            chat = append_assistant_chat(chat, {"content": content, "type": "progress"})
             markdown, image, gallery, profile, products = "", None, [], "", []
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume            
-        elif msg_type == "chat":
-            # 流式chat输出，上一条是assistant则替换，否则append
-            if chat and chat[-1].get("role") == "assistant":
-                chat[-1]["content"] = content
-            else:
-                chat.append({"role": "assistant", "content": content})
-            markdown, image, gallery, profile, products = "", None, [], "", []
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
-        elif msg_type == "structure":
-            chat, markdown, image, gallery, profile, products, a, b, c = structure_to_frontend_outputs(content)
-            MiraLog("app", f"chat: {chat}")
+        elif msg_type == "final":
+            response, markdown, image, gallery, profile, products = structure_to_frontend_outputs(content)
+            MiraLog("app", f"response: {response}")
             MiraLog("app", f"markdown: {markdown}")
             MiraLog("app", f"image: {image}")
             MiraLog("app", f"gallery: {gallery}")
             MiraLog("app", f"profile: {profile}")
             MiraLog("app", f"products: {products}")
+            chat = append_assistant_chat(chat, {"content": response, "type": "final"})
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
         else:
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume

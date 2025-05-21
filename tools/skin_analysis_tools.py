@@ -333,12 +333,13 @@ def skin_feedback(data):
     """
     MiraLog("skin_analysis", f"[skin_feedback] 生成反馈，输入数据: {data}")
     SYSTEM_PROMPT = (
-        "你是一个专业的皮肤健康顾问，请根据用户的肤质检测结果，生成如下内容：\n"
-        "1. 检测完成提示（如：已完成肤质检测，具体信息可以查看肤质检测结果）\n"
-        "2. 肤质分析说明（如：你的黑眼圈为轻度，请继续保持早睡早起的好习惯）\n"
-        "3. 情感反馈（如：别担心，坚持护肤会越来越好！）\n"
-        "4. 下一步建议（如：和Mira说说你最关心的肤质问题是什么吧）\n"
-        "请用简洁、温暖的中文输出。\n"
+        "你是用户贴心的人性化健康伴侣Mira。请根据用户的肤质检测结果，生成一段自然、连贯、温暖的中文聊天回复。"
+        "回复内容应尽量涵盖以下四个方面，但不要生硬分条或罗列：\n"
+        "—— 检测完成的温馨提示\n"
+        "—— 针对用户肤质的专业分析和建议\n"
+        "—— 充满关怀和鼓励的情感反馈\n"
+        "—— 贴心的下一步互动建议\n"
+        "请用亲切、鼓励、自然的语气，将这些内容巧妙融合在一段聊天回复中，让用户感受到陪伴和支持。\n"
         "用户肤质检测原始数据如下：\n"
         f"{data}"
     )
@@ -347,10 +348,12 @@ def skin_feedback(data):
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(content="请生成反馈")
     ]
-    feedback = llm.invoke(messages).content.strip()
-    MiraLog("skin_analysis", f"[skin_feedback] 反馈内容: {feedback}")
-
-    return feedback 
+    # 返回生成器，流式输出
+    def stream_gen():
+        for chunk in llm.stream(messages):
+            if hasattr(chunk, 'content') and chunk.content:
+                yield chunk.content
+    return stream_gen()
 
 def extract_best_face_frame(video_base64):
     """
@@ -486,16 +489,12 @@ def skin_analysis_by_QwenYi(image_base64):
         }
     ])
 
-    llm = ChatOpenAI(model_name="qwen2.5-vl-72b-instruct", temperature=0, openai_api_key=OPENAI_API_KEY, openai_api_base=OPENAI_API_BASE)
+    llm = ChatOpenAI(model_name="qwen2.5-vl-72b-instruct", temperature=0, openai_api_key=OPENAI_API_KEY, openai_api_base=OPENAI_API_BASE).with_structured_output(method="json_mode")
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         image_message
     ]
-    feedback = llm.invoke(messages).content.strip()
-    # 反馈信息如果是 ```json 开头，则去掉 ```json 和 ```
-    if feedback.startswith("```json"):
-        feedback = feedback[len("```json"):].strip()
-        feedback = feedback[:feedback.rfind("```")].strip()
-    MiraLog("skin_analysis", f"[skin_feedback] 反馈内容: {feedback}")
+    feedback = llm.invoke(messages)
 
+    MiraLog("skin_analysis", f"[skin_feedback] 反馈内容: {feedback}")
     return feedback 

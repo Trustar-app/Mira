@@ -26,19 +26,22 @@ def wait_for_video_node(state: SkinAnalysisState):
     video = state["current_video"]
 
     # 将video转成base64
-    if video and os.path.exists(video):
-        try:
-            with open(video, "rb") as video_file:
-                video_bytes = video_file.read()
-                video_base64 = base64.b64encode(video_bytes).decode('utf-8')
-                state["current_video_base64"] = video_base64
-                MiraLog("skin_analysis", f"视频转换为base64成功，路径: {video}, 转换后长度: {len(video_base64)}")
-        except Exception as e:
-            MiraLog("skin_analysis", f"视频转换为base64失败: {e}", "ERROR")
-    else:
-        MiraLog("skin_analysis", f"肤质检测的视频输入不存在: {video}")
-        response = interrupt({"type": "interrupt", "content": "请上传面部视频以进行肤质检测。"})
-        state["current_video"] = response
+    if not video or not os.path.exists(video):
+        while True:
+            MiraLog("skin_analysis", f"肤质检测的视频输入不存在: {video}")
+            response = interrupt({"type": "interrupt", "content": "请上传面部视频以进行肤质检测。"})
+            video = response.get("video")
+            if video and os.path.exists(video):
+                state["current_video"] = video
+                break
+    try:
+        with open(video, "rb") as video_file:
+            video_bytes = video_file.read()
+            video_base64 = base64.b64encode(video_bytes).decode('utf-8')
+            state["current_video_base64"] = video_base64
+            MiraLog("skin_analysis", f"视频转换为base64成功，路径: {video}, 转换后长度: {len(video_base64)}")
+    except Exception as e:
+        MiraLog("skin_analysis", f"视频转换为base64失败: {e}", "ERROR")
 
     return state
 
@@ -50,28 +53,43 @@ def video_analysis_node(state: SkinAnalysisState):
     :return: (新 State, 进度消息)
     """
     # 调用 extract_best_face_frame，更新 best_face_image/face_detected
-    logging.info("[video_analysis_node] called")
+    MiraLog("skin_analysis", "进入视频分析节点")
     writer = get_stream_writer()
-    # mock: 实际应调用 extract_best_face_frame 工具
-    best_face_image = extract_best_face_frame(state["current_video_base64"])
-    if best_face_image:
-        state["best_face_image"] = best_face_image
-        state["face_detected"] = True
-        writer({"type": "progress", "content": "已提取最佳人脸图片，准备分析肤质..."})
 
-        try:
-            save_path = Path(__file__).parent.parent / "runtime_data" / "skin_analysis" / "best_face_frame.jpg"
-            if not save_path.parent.exists():
-                save_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(save_path, "wb") as f:
-                f.write(base64.b64decode(best_face_image))
-            MiraLog("skin_analysis", f"保存最佳人脸图片成功，路径: {save_path}")
-        except Exception as e:
-            MiraLog("skin_analysis", f"保存最佳人脸图片失败: {e}")
-    else:
-        # TODO 这里的中断并非幂等，需要修改
-        response = interrupt({"type": "interrupt", "content": "未检测到人脸，请重新输入视频。"})
-        state["current_video"] = response
+    while True:
+        writer({"type": "progress", "content": "正在提取最佳人脸图片..."})
+        best_face_image = extract_best_face_frame(state["current_video_base64"])
+        if not best_face_image:
+            while True:
+                response = interrupt({"type": "interrupt", "content": "未检测到人脸，请重新输入视频。"})
+                video = response.get("video")
+                if video and os.path.exists(video):
+                    state["current_video"] = video
+                    break
+            try:
+                with open(video, "rb") as video_file:
+                    video_bytes = video_file.read()
+                    video_base64 = base64.b64encode(video_bytes).decode('utf-8')
+                    state["current_video_base64"] = video_base64
+                    MiraLog("skin_analysis", f"视频转换为base64成功，路径: {video}, 转换后长度: {len(video_base64)}")
+            except Exception as e:
+                MiraLog("skin_analysis", f"视频转换为base64失败: {e}", "ERROR")
+        else:
+            break
+
+    state["best_face_image"] = best_face_image
+    state["face_detected"] = True
+    
+    try:
+        save_path = Path(__file__).parent.parent / "runtime_data" / "skin_analysis" / "best_face_frame.jpg"
+        if not save_path.parent.exists():
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(save_path, "wb") as f:
+            f.write(base64.b64decode(best_face_image))
+        MiraLog("skin_analysis", f"保存最佳人脸图片成功，路径: {save_path}")
+    except Exception as e:
+        MiraLog("skin_analysis", f"保存最佳人脸图片失败: {e}")
+
     return state
 
 # 3. 肤质AI检测节点
@@ -82,20 +100,17 @@ def node_skin_analysis(state: SkinAnalysisState):
     :return: (新 State, 分析报告)
     """
     # 调用肤质分析模型，更新 skin_analysis_result/analysis_report
-    logging.info("[node_skin_analysis] called")
+    MiraLog("skin_analysis", "进入肤质AI检测节点")
     writer = get_stream_writer()
     image_base64 = state["best_face_image"]
 
+    writer({"type": "progress", "content": "正在进行肤质AI检测..."})
     if USE_YOUCAM_API:
         skin_analysis_result = skin_analysis(image_base64)
     else:
         skin_analysis_result = skin_analysis_by_QwenYi(image_base64)
 
-    if type(skin_analysis_result) == dict:
-        state["skin_analysis_result"] = json.dumps(skin_analysis_result)
-    else:
-        state["skin_analysis_result"] = skin_analysis_result
-    writer({"type": "progress", "content": f"肤质分析结果：{state['skin_analysis_result']}"})
+    state["skin_analysis_result"] = skin_analysis_result
     return state
 
 # 4. 结果反馈节点
@@ -107,12 +122,16 @@ def node_result_feedback(state: SkinAnalysisState):
     :return: (新 State, 反馈消息)
     """
     # 生成个性化解读，更新 analysis_report/progress
-    logging.info("[node_result_feedback] called")
+    MiraLog("skin_analysis", "进入结果反馈节点")
     writer = get_stream_writer()
-    # mock: 实际应调用 generate_skin_analysis_report 工具
-    analysis_report = skin_feedback(state["skin_analysis_result"])
+    writer({"type": "progress", "content": "正在分析检测结果..."})
+    response = skin_feedback(state["skin_analysis_result"])
+    analysis_report = ""
+    for chunk in response:
+        analysis_report += chunk
+        writer({"type": "progress", "content": analysis_report})
     state["analysis_report"] = analysis_report
-    writer({"type": "structure", "content": state})
+    writer({"type": "final", "content": {"response": analysis_report, "markdown": state["skin_analysis_result"]}})
     return state
 
 def build_skincare_graph():

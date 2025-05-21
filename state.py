@@ -59,6 +59,7 @@ class UserProfileEditState(TypedDict, total=False):
     current_video: Optional[str]
     multimodal_text: Optional[str]
 
+    basic_info: Annotated[Dict[str, Any], dict_merge_reducer]
     current_flow: Optional[str]
 
 
