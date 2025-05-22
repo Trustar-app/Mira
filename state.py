@@ -81,7 +81,7 @@ class CareMakeupGuideState(TypedDict, total=False):
     current_flow: Optional[str]
 
 
-class ProductRecognitionState(TypedDict, total=False):
+class ProductAnalysisState(TypedDict, total=False):
     user_profile: Annotated[Dict[str, Any], dict_merge_reducer]
     products_directory: Annotated[Dict[str, Any], dict_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
@@ -92,7 +92,6 @@ class ProductRecognitionState(TypedDict, total=False):
     multimodal_text: Optional[str]
 
     # 中间产物
-    product_raw_info: Optional[Dict[str, Any]]   # AI识别出的原始产品信息（如品牌、品名、条码等）
     product_structured_info: Optional[Dict[str, Any]]  # 网络检索到的结构化产品信息
 
     current_flow: Optional[str]

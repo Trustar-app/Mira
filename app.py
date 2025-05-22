@@ -98,14 +98,16 @@ def process_user_input(video: str, audio, text, chat=None, thread_id=None, resum
             markdown, image, gallery, profile, products = "", None, [], "", []
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume            
         elif msg_type == "final":
-            response, markdown, image, gallery, profile, products = structure_to_frontend_outputs(content)
+            response, markdown, image, gallery, profile, product = structure_to_frontend_outputs(content)
             MiraLog("app", f"response: {response}")
             MiraLog("app", f"markdown: {markdown}")
             MiraLog("app", f"image: {image}")
             MiraLog("app", f"gallery: {gallery}")
             MiraLog("app", f"profile: {profile}")
-            MiraLog("app", f"products: {products}")
+            MiraLog("app", f"product: {product}")
             chat = append_assistant_chat(chat, {"content": response, "type": "final"})
+            if product:
+                products.append(product)
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
         else:
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume

@@ -71,7 +71,7 @@ def structure_to_frontend_outputs(content):
     image = None
     gallery = []
     profile = ""
-    products = []
+    product = ""
     if content.get("response"):
         response = content["response"]
     if content.get("markdown"): # 对 dict 类型做优美的格式化处理
@@ -82,10 +82,10 @@ def structure_to_frontend_outputs(content):
         gallery = content["gallery"]
     if content.get("profile"):
         profile = dict_to_markdown(content["profile"])
-    if content.get("products"):
-        products = content["products"]
+    if content.get("product"):
+        product = dict_to_markdown(content["products"])
 
-    return response, markdown, image, gallery, profile, products
+    return response, markdown, image, gallery, profile, product
 
 def format_skin_check(skin_state):
     """
