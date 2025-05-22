@@ -63,16 +63,12 @@ def input_collection_tool(query: str) -> dict:
 
     return content
 
-    
-class ProductDirectoryInput(BaseModel):
-    confirm_prompt: str = Field(description="对用户是否要添加产品到目录的询问，要求用户回答是或否")
-
-@tool("add_product_to_directory", args_schema=ProductDirectoryInput, return_direct=True)
-def add_product_to_directory_tool(confirm_prompt: str) -> dict:
+@tool("add_product_to_directory", return_direct=True)
+def add_product_to_directory_tool() -> dict:
     """
     用户确认后将产品信息放入目录。
     """
-    confirm = interrupt({"type": "interrupt", "content": confirm_prompt})
+    confirm = interrupt({"type": "interrupt", "content": ""})
     if "是" in confirm.get("text", "").lower():
         return "产品已加入目录"
     else:

@@ -18,7 +18,7 @@ def append_assistant_chat(chat, msg):
         chat.append({"role": "assistant", "content": msg["content"], "type": msg["type"]})
     return chat
 
-def process_user_input(video: str, audio, text, chat=None, thread_id=None, resume=None):
+def process_user_input(video: str, audio, text, chat=None, thread_id=None, resume=None, profile=None, products=[]):
     """
     支持多轮对话记忆，thread_id用于区分不同会话。
     兼容mira_graph.stream自定义输出结构{"type": , "content": ...}
@@ -26,8 +26,8 @@ def process_user_input(video: str, audio, text, chat=None, thread_id=None, resum
     markdown = ""
     image = None
     gallery = []
-    profile = ""
-    products = []
+    if products is None:
+        products = []
 
     if chat is None:
         chat = []
@@ -95,7 +95,7 @@ def process_user_input(video: str, audio, text, chat=None, thread_id=None, resum
         if msg_type == "progress":
             # 进度信息，chat区只保留一条最新assistant进度
             chat = append_assistant_chat(chat, {"content": content, "type": "progress"})
-            markdown, image, gallery, profile, products = "", None, [], "", []
+            markdown, image, gallery = "", None, []
             yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume            
         elif msg_type == "final":
             response, markdown, image, gallery, profile, product = structure_to_frontend_outputs(content)
@@ -143,11 +143,11 @@ def build_demo():
                 profile_out = gr.Markdown("")
             with gr.Column():
                 gr.Markdown("#### 💄 产品卡片集")
-                products_out = gr.Gallery(label="产品卡片集", value=[], columns=2, height=220)
+                products_out = gr.Gallery(label="产品卡片集", value=[], columns=2)
         # 事件绑定
         submit_btn.click(
             process_user_input,
-            inputs=[video_in, audio_in, text_in, chat_out, thread_id_state, resume_state],
+            inputs=[video_in, audio_in, text_in, chat_out, thread_id_state, resume_state, profile_out, products_out],
             outputs=[chat_out, markdown_out, image_out, gallery_out, profile_out, products_out, video_in, audio_in, text_in, thread_id_state, resume_state]
         )
         # 新建对话按钮：重置所有输入输出，并生成新thread_id

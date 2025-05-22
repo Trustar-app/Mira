@@ -83,7 +83,7 @@ def structure_to_frontend_outputs(content):
     if content.get("profile"):
         profile = dict_to_markdown(content["profile"])
     if content.get("product"):
-        product = dict_to_markdown(content["products"])
+        product = format_product(content["product"])
 
     return response, markdown, image, gallery, profile, product
 
@@ -159,3 +159,14 @@ def dict_to_markdown(d, indent=0):
     return markdown
 
 
+def format_product(product):
+    image = product.get("image_url", "")
+    title = product.get("name", "未命名产品")
+    # 前端还不好展示更多信息
+    # desc = (
+    #     f"品牌：{product.get('brand', '')}\n"
+    #     f"分类：{product.get('category', '')}\n"
+    #     f"成分：{product.get('ingredients', '')}\n"
+    #     f"功效：{product.get('effects', '')}"
+    # )
+    return (image, title)
