@@ -1,7 +1,8 @@
 """
 State 结构、reducer、schema 定义，支持主流程与各子流程状态管理。
 """
-from typing import Optional, Dict, Any, List, TypedDict, Annotated
+from typing import Optional, Dict, Any, List
+from typing_extensions import TypedDict, Annotated
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage
 
@@ -73,10 +74,7 @@ class CareMakeupGuideState(TypedDict, total=False):
     current_video: Optional[str]
     multimodal_text: Optional[str]
 
-    scenario: Optional[str]
-    recommended_steps: Optional[List[Dict[str, Any]]]  # 推荐/确认后的步骤列表
-    current_step_index: Optional[int]
-    current_step_feedback: Optional[str]
+    plan: Optional[str] # 护肤/化妆计划
 
     current_flow: Optional[str]
 

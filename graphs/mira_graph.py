@@ -137,7 +137,7 @@ def call_care_makeup_guide_subgraph(state: MiraState):
     subgraph_input = {
         "user_profile": state.get("user_profile"),
         "products_directory": state.get("products_directory"),
-        "messages": state.get("messages", []),
+        "messages": state.get("messages", [])[-1:],
         "current_text": state.get("current_text"),
         "current_audio": state.get("current_audio"),
         "current_video": state.get("current_video"),
@@ -147,7 +147,7 @@ def call_care_makeup_guide_subgraph(state: MiraState):
     return {
         "user_profile": subgraph_output.get("user_profile"),
         "products_directory": subgraph_output.get("products_directory"),
-        "messages": subgraph_output.get("messages"),
+        "messages": subgraph_output.get("messages")[-1:],
         "current_text": subgraph_output.get("current_text"),
         "current_audio": subgraph_output.get("current_audio"),
         "current_video": subgraph_output.get("current_video"),
