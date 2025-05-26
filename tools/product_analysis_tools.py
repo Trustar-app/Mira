@@ -1,9 +1,6 @@
-import base64
-import mimetypes
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
-from config import OPENAI_API_BASE, OPENAI_API_KEY
-import json
+from langchain_core.messages import HumanMessage
+
 
 def messages_to_text(messages):
     lines = []

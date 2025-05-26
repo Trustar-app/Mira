@@ -6,16 +6,12 @@ from utils.loggers import MiraLog
 import os
 from PIL import Image
 
-def format_messages(video, audio, text, multimodal_text):
+def format_messages(video, text):
     """
-    将前端输入(video, audio, text)转换为 OpenAI 格式 messages
+    将前端输入(video, text)转换为 OpenAI 格式 messages
     """
     messages = []
-    
-    # 处理文本
-    if text:
-        messages.append({"type": "text", "text": text})
-    
+
     # 处理视频
     if video and isinstance(video, str) and os.path.exists(video):
         try:
@@ -39,25 +35,25 @@ def format_messages(video, audio, text, multimodal_text):
             ]
             
             # 如果有文本内容，添加到content列表中
-            if multimodal_text:
+            if text:
                 messages[0]["content"].append({
                     "type": "text",
-                    "text": multimodal_text
+                    "text": text
                 })
             
         except Exception as e:
             MiraLog("formatters", f"处理视频数据时出错: {e}", "ERROR")
-            if multimodal_text:
+            if text:
                 messages = [{
                     "role": "user",
-                    "content": [{"type": "text", "text": multimodal_text}]
+                    "content": [{"type": "text", "text": text}]
                 }]
     
     # 如果没有视频，只有文本
-    elif multimodal_text:
+    elif text:
         messages = [{
             "role": "user",
-            "content": [{"type": "text", "text": multimodal_text}]
+            "content": [{"type": "text", "text": text}]
         }]
     
     return messages
@@ -158,15 +154,3 @@ def dict_to_markdown(d, indent=0):
             markdown += f"{prefix}- **{key}**: {value}\n\n"
     return markdown
 
-
-def format_product(product):
-    image = product.get("image_url", "")
-    title = product.get("name", "未命名产品")
-    # 前端还不好展示更多信息
-    # desc = (
-    #     f"品牌：{product.get('brand', '')}\n"
-    #     f"分类：{product.get('category', '')}\n"
-    #     f"成分：{product.get('ingredients', '')}\n"
-    #     f"功效：{product.get('effects', '')}"
-    # )
-    return (image, title)

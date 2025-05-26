@@ -3,16 +3,15 @@
 """
 import os
 import base64
-import logging
-import json
 from pathlib import Path
 from langgraph.graph import StateGraph, END, START
-from state import SkinAnalysisState
+from state import SkinAnalysisState, ConfigState
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from utils.loggers import MiraLog
 from tools.skin_analysis_tools import extract_best_face_frame, skin_analysis, skin_feedback, skin_analysis_by_QwenYi
-from config import USE_YOUCAM_API
+from langchain_core.runnables import RunnableConfig
+
 # 1. 输入采集节点
 def wait_for_video_node(state: SkinAnalysisState):
     """
@@ -93,7 +92,7 @@ def video_analysis_node(state: SkinAnalysisState):
     return state
 
 # 3. 肤质AI检测节点
-def node_skin_analysis(state: SkinAnalysisState):
+def node_skin_analysis(state: SkinAnalysisState, config: RunnableConfig):
     """
     肤质AI检测节点：对图片做肤质分析。
     :param state: 当前 State
@@ -105,16 +104,16 @@ def node_skin_analysis(state: SkinAnalysisState):
     image_base64 = state["best_face_image"]
 
     writer({"type": "progress", "content": "正在进行肤质AI检测..."})
-    if USE_YOUCAM_API:
-        skin_analysis_result = skin_analysis(image_base64)
+    if config.use_youcam:
+        skin_analysis_result = skin_analysis(image_base64, config)
     else:
-        skin_analysis_result = skin_analysis_by_QwenYi(image_base64)
+        skin_analysis_result = skin_analysis_by_QwenYi(image_base64, config)
 
     state["skin_analysis_result"] = skin_analysis_result
     return state
 
 # 4. 结果反馈节点
-def node_result_feedback(state: SkinAnalysisState):
+def node_result_feedback(state: SkinAnalysisState, config: RunnableConfig):
     """
     结果反馈节点：基于分析报告，AI 生成个性化解读。
     :param state: 当前 State
@@ -125,7 +124,7 @@ def node_result_feedback(state: SkinAnalysisState):
     MiraLog("skin_analysis", "进入结果反馈节点")
     writer = get_stream_writer()
     writer({"type": "progress", "content": "正在分析检测结果..."})
-    response = skin_feedback(state["skin_analysis_result"])
+    response = skin_feedback(state["skin_analysis_result"], config)
     analysis_report = ""
     for chunk in response:
         analysis_report += chunk
@@ -135,7 +134,7 @@ def node_result_feedback(state: SkinAnalysisState):
     return state
 
 def build_skincare_graph():
-    graph = StateGraph(SkinAnalysisState)
+    graph = StateGraph(SkinAnalysisState, config_schema=ConfigState)
     graph.add_node("wait_for_video", wait_for_video_node)
     graph.add_node("video_analysis", video_analysis_node)
     graph.add_node("skin_analysis", node_skin_analysis)

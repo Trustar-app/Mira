@@ -2,27 +2,20 @@
 护肤/化妆引导子流程 Graph，节点实现如下。
 """
 from langgraph.graph import StateGraph, END, START
-from state import CareMakeupGuideState
+from state import CareMakeupGuideState, ConfigState
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from langchain_openai import ChatOpenAI
-from config import OPENAI_API_BASE, OPENAI_API_KEY
 from langchain_core.tools import tool
+from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.prebuilt import InjectedState, ToolNode
 from typing import Annotated
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
-llm = ChatOpenAI(
-    model="qwen3-235b-a22b",
-    openai_api_base=OPENAI_API_BASE,
-    openai_api_key=OPENAI_API_KEY,
-    streaming=True
-)
-
 @tool("generate_plan", return_direct=True, response_format="content_and_artifact")
-def generate_plan(state: Annotated[dict, InjectedState]):
+def generate_plan(state: Annotated[dict, InjectedState], config: RunnableConfig):
     """
     生成护肤/化妆计划
     """
@@ -52,9 +45,9 @@ def generate_plan(state: Annotated[dict, InjectedState]):
         plan_section=f"【当前计划】：{state['plan']}\n" if state.get("plan") else ""
     )
     llm = ChatOpenAI(
-        model="qwen2.5-vl-72b-instruct",
-        openai_api_base=OPENAI_API_BASE,
-        openai_api_key=OPENAI_API_KEY,
+        model=config.chat_model_name,
+        openai_api_base=config.chat_api_base,
+        openai_api_key=config.chat_api_key,
         streaming=False
     ).with_structured_output(method="json_mode")
     msg = "完成计划生成，请向用户简要说明当前计划内容，并请求确认" if not state.get("plan") else "生成新计划，请向用户简要说明计划内容，并请求确认"
@@ -78,15 +71,13 @@ def request_user_input(query: str):
         content.append({"type": "video_url", "video_url": response.get("video")})
     return content
 
-llm_with_tools = llm.bind_tools([generate_plan, request_user_input])
-
 tool_node = ToolNode(
     tools=[generate_plan, request_user_input],
     handle_tool_errors=False
 )
 
 # 节点实现
-def chatbot(state: CareMakeupGuideState):
+def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
     stream_writer = get_stream_writer()
     # 构建系统 prompt
     system_prompt = (
@@ -111,6 +102,13 @@ def chatbot(state: CareMakeupGuideState):
     stream_writer({"type": "progress", "content": "正在分析用户输入..."})
     content_buffer = ""
     first_chunk = True
+    llm = ChatOpenAI(
+        model="qwen3-235b-a22b",
+        openai_api_base=config.chat_api_base,
+        openai_api_key=config.chat_api_key,
+        streaming=True
+    )
+    llm_with_tools = llm.bind_tools([generate_plan, request_user_input])
     for chunk in llm_with_tools.stream(messages):
         if hasattr(chunk, "content") and chunk.content:
             content_buffer += chunk.content
@@ -132,29 +130,6 @@ def post_tool_node(state: CareMakeupGuideState):
         return {**tool_message.artifact}
 
 
-# def generate_plan_node(state: CareMakeupGuideState):
-#     writer = get_stream_writer()
-#     writer({"type": "progress", "content": "正在生成计划..."})
-#     response = generate_plan(state)
-#     writer({"type": "final", "content": {"markdown": response}})
-#     msg = "完成计划生成，等待用户确认" if not state.get("plan") else "生成新计划，等待用户确认"
-#     return {
-#         "messages": [
-#             ToolMessage(content=msg, tool_call_id=state.get("messages", [])[-1].tool_calls[0]["id"])
-#         ],
-#         "plan": response
-#     }
-
-# def request_user_input_node(state: CareMakeupGuideState):
-#     # 从上一条信息中的工具调用中获取 query 参数
-#     query = state.get("messages", [])[-1].tool_calls[0]["args"]["query"]
-#     response = request_user_input(query)
-#     return {
-#         "messages": [
-#             ToolMessage(content=response, tool_call_id=state.get("messages", [])[-1].tool_calls[0]["id"])
-#         ]
-#     }
-
 def chatbot_condition(state: CareMakeupGuideState):
     writer = get_stream_writer()
     messages = state.get("messages", [])
@@ -170,7 +145,7 @@ def chatbot_condition(state: CareMakeupGuideState):
     return END  # 或下一个节点
 
 def build_care_makeup_guide_graph():
-    graph = StateGraph(CareMakeupGuideState)
+    graph = StateGraph(CareMakeupGuideState, config_schema=ConfigState)
     graph.add_node("chatbot", chatbot)
     graph.add_node("tool_node", tool_node)
     graph.add_node("post_tool_node", post_tool_node)

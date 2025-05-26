@@ -8,13 +8,13 @@ from langgraph.graph import StateGraph, END, START
 from langgraph.types import interrupt
 from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.config import get_stream_writer
-from state import ProductAnalysisState
-from config import OPENAI_API_BASE, OPENAI_API_KEY, TAVILY_API_KEY
+from state import ProductAnalysisState, ConfigState
 from utils.loggers import MiraLog
 from tools.product_analysis_tools import extract_structured_info_from_search
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from typing import Annotated
+from langchain_core.runnables import RunnableConfig
 
 system_message = (
     "你是一位私人产品适配度分析专家，你的任务是基于用户提到的产品，完成如下步骤：\n"
@@ -34,17 +34,6 @@ system_message = (
 #     streaming=True
 # )
 
-llm = ChatOpenAI(
-    model="qwen2.5-vl-72b-instruct",
-    openai_api_base=OPENAI_API_BASE,
-    openai_api_key=OPENAI_API_KEY,
-    streaming=True
-)
-
-tool_search = TavilySearch(
-    tavily_api_key=TAVILY_API_KEY,
-    max_results=5
-)
 
 class InputCollectionInput(BaseModel):
     query: str = Field(description="你的询问")
@@ -82,16 +71,40 @@ def extract_structured_info_node(state: ProductAnalysisState):
     stream_writer({"type": "final", "content": {"product": structured_info}})
     return state
 
+class TavilySearchWithConfig(TavilySearch):
+    def _run(
+        self,
+        query: str,
+        config: RunnableConfig = None,
+        **kwargs
+    ):
+        # 如果有新的 key，动态替换
+        if config and hasattr(config, "tavily_api_key"):
+            self.api_wrapper.tavily_api_key = config.tavily_api_key
+        # 调用父类 _run
+        return super()._run(query, **kwargs)
+
+tool_search = TavilySearchWithConfig(
+    max_results=5
+)
+
 tool_node = ToolNode(
     tools=[tool_search, input_collection_tool, add_product_to_directory_tool],
     handle_tool_errors=True
 )
-llm_with_tools = llm.bind_tools([tool_search, input_collection_tool, add_product_to_directory_tool])
 
-def chatbot(state: ProductAnalysisState):
+
+def chatbot(state: ProductAnalysisState, config: RunnableConfig):
     MiraLog("product_analysis", "进入产品分析聊天机器人")
     stream_writer = get_stream_writer()
 
+    llm = ChatOpenAI(
+        model=config.chat_model_name,
+        openai_api_base=config.chat_api_base,
+        openai_api_key=config.chat_api_key,
+        streaming=True
+    )
+    llm_with_tools = llm.bind_tools([tool_search, input_collection_tool, add_product_to_directory_tool])
     messages = [
         SystemMessage(content=system_message.format(user_profile=state["user_profile"])),
         *state["messages"]
@@ -150,7 +163,7 @@ def tool_post_condition(state: ProductAnalysisState):
     return "chatbot"
 
 def build_product_graph():
-    graph = StateGraph(ProductAnalysisState)
+    graph = StateGraph(ProductAnalysisState, config_schema=ConfigState)
     # 主要节点
     graph.add_node("chatbot", chatbot)    
     graph.add_node("tools", tool_node)
