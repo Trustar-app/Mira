@@ -62,39 +62,30 @@ def format_messages(video, audio, text, multimodal_text):
     
     return messages
 
-def structure_to_frontend_outputs(state):
+def structure_to_frontend_outputs(content):
     """
-    将任意 State 转换为前端所需的 (chat, markdown, image, gallery, profile, products, ...)
+    将任意 State 转换为前端结构化展示区所需的 (markdown, image, gallery, profile, products, ...)
     """
-    # 1. 聊天历史
-    chat = getattr(state, "messages", None) or []
-    # 2. 结构化 markdown
+    response = ""
     markdown = None
     image = None
     gallery = []
     profile = ""
     products = []
+    if content.get("response"):
+        response = content["response"]
+    if content.get("markdown"): # 对 dict 类型做优美的格式化处理
+        markdown = dict_to_markdown(content["markdown"])
+    if content.get("image"):
+        image = content["image"]
+    if content.get("gallery"):
+        gallery = content["gallery"]
+    if content.get("profile"):
+        profile = dict_to_markdown(content["profile"])
+    if content.get("products"):
+        products = content["products"]
 
-    # 针对不同 State 类型做分派
-    if state["analysis_report"] is not None:
-        # 肤质检测流程
-        formatted = format_skin_check(state)
-        markdown = formatted["markdown"]
-        image = formatted["image"]
-        gallery = formatted["gallery"]
-        chat += formatted["chat"]
-        profile = format_profile(getattr(state, "user_profile", {}))
-    elif hasattr(state, "recommended_products"):
-        # 产品推荐流程
-        products = getattr(state, "recommended_products", [])
-        markdown = format_product_recommendation(products)
-    elif hasattr(state, "recommended_steps"):
-        # 化妆/护肤引导流程
-        steps = getattr(state, "recommended_steps", [])
-        markdown = format_makeup_steps(steps)
-    # ...其他流程...
-
-    return chat, markdown, image, gallery, profile, products, None, None, ""
+    return response, markdown, image, gallery, profile, products
 
 def format_skin_check(skin_state):
     """
@@ -148,35 +139,23 @@ def format_skin_check(skin_state):
 
     return skin_result_dict
 
+def dict_to_markdown(d, indent=0):
+    """将结构化 dict 转为 markdown 格式字符串，主项之间用两个换行隔开"""
+    markdown = ""
+    prefix = "  " * indent  # 两个空格缩进
+    for key, value in d.items():
+        if isinstance(value, dict):
+            markdown += f"{prefix}- **{key}**:\n\n"
+            markdown += dict_to_markdown(value, indent + 1)
+        elif isinstance(value, list):
+            markdown += f"{prefix}- **{key}**:\n\n"
+            for item in value:
+                if isinstance(item, dict):
+                    markdown += dict_to_markdown(item, indent + 1)
+                else:
+                    markdown += f"{prefix}  - {item}\n\n"
+        else:
+            markdown += f"{prefix}- **{key}**: {value}\n\n"
+    return markdown
 
-
-def format_product_recommendation(products):
-    """
-    格式化产品推荐结果
-    """
-    pass
-
-def format_makeup_steps(steps):
-    """
-    格式化化妆/护肤引导步骤
-    """
-    pass
-
-def format_product_recognition(product_info):
-    """
-    格式化产品识别结果
-    """
-    pass
-
-def format_profile(profile):
-    """
-    格式化用户档案
-    """
-    pass
-
-def format_care_makeup_guide(steps):
-    """
-    格式化化妆/护肤引导步骤
-    """
-    pass
 

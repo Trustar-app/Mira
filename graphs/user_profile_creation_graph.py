@@ -14,116 +14,136 @@ from utils.loggers import MiraLog
 # 1. 性别选择节点
 def gender_selection_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", "进入创建用户档案子图")
-    MiraLog("user_profile_creation", f"节点：性别选择")
-    response = interrupt({"type": "interrupt", "content": "请输入你的性别"})
+    MiraLog("user_profile_creation", f"进入节点：性别选择")
+    response = interrupt({"type": "interrupt", "content": "请告诉我你的性别"}).get("text")
     # 更新 State
     return {
-        "user_profile": {"gender": response}, 
+        "basic_info": {"gender": response}, 
         "messages": [
-                AIMessage(content={"type": "text", "text": "请输入你的性别"}),
-                HumanMessage(content={"type": "text", "text": response})
-            ]
+            AIMessage(content="请告诉我你的性别"),
+            HumanMessage(content=response)
+        ]
     }
 
 # 2. 年龄输入节点
 def age_input_node(state: UserProfileEditState):
-    MiraLog("user_profile_creation", f"节点：年龄输入")
-    response = interrupt({"type": "interrupt", "content": "请输入你的年龄"})
+    MiraLog("user_profile_creation", f"进入节点：年龄输入")
+    response = interrupt({"type": "interrupt", "content": "请告诉我你的年龄"}).get("text")
     # 更新 State
     return {
-        "user_profile": {"age": response}, 
+        "basic_info": {"age": response}, 
         "messages": [
-            AIMessage(content={"type": "text", "text": "请输入你的年龄"}),
-            HumanMessage(content={"type": "text", "text": response})
+            AIMessage(content="请告诉我你的年龄"),
+            HumanMessage(content=response)
         ]
     }
 
 # 3. 面部特征采集与分析节点（用 VLM 分析视频）
 def face_feature_analysis_node(state: UserProfileEditState):
-    MiraLog("user_profile_creation", f"节点：面部特征采集与分析")
+    writer = get_stream_writer()
+    MiraLog("user_profile_creation", f"进入节点：面部特征采集与分析")
     while True:
         response = interrupt({"type": "interrupt", "content": "请上传面部视频以采集五官特征、肤色、肤质"})
         if "video" in response:
             break
         else:
             response = interrupt({"type": "interrupt", "content": "请上传面部视频以采集五官特征、肤色、肤质"})
-    video_path = response['video']
+    video_path = response.get("video")
     # 工具调用：分析面部特征
+    writer({"type": "progress", "content": "正在分析面部特征..."})
     features = analyze_face_features_with_llm(video_path)
+    face_features = features.get('face_features', {})
+
+    skin_color = features.get('skin_color', '')
+    skin_quality = features.get('skin_quality', [])
+    feature_str = (
+        "您的面部特征为：\n"
+        "【五官特征】\n"
+        f"  - 脸型：{face_features.get('face_shape', '未识别')}\n"
+        f"  - 眼睛：{face_features.get('eyes', '未识别')}\n"
+        f"  - 鼻子：{face_features.get('nose', '未识别')}\n"
+        f"  - 嘴巴：{face_features.get('mouth', '未识别')}\n"
+        f"  - 眉毛：{face_features.get('eyebrows', '未识别')}\n"
+        "\n"
+        f"【肤色】\n  - {skin_color if skin_color else '未识别'}\n"
+        "\n"
+        "【肤质标签】\n"
+        + (''.join([f"  - {item}\n" for item in skin_quality]) if skin_quality else "  - 未识别\n")
+    )
+    writer({"type": "final", "content": {"response": feature_str}})
 
     # 更新 State
     return {
-        "user_profile": {
+        "basic_info": {
             "face_features": features.get("face_features"),
             "skin_color": features.get("skin_color"),
             "skin_quality": features.get("skin_quality")
         },
         "messages": [
-            AIMessage(content={"type": "text", "text": "请上传面部视频以采集五官特征、肤色、肤质"}),
-            HumanMessage(content={"type": "text", "text": response})
+            AIMessage(content="请上传面部视频以采集五官特征、肤色、肤质"),
+            HumanMessage(content=f"<视频>{video_path}</视频>")
         ]
     }
 
 # 4. 化妆专业度打分节点
 def makeup_skill_node(state: UserProfileEditState):
-    logging.info("[makeup_skill_node] called")
-    response = interrupt({"type": "interrupt", "content": "请给你的化妆专业度打分（0-10分）"})
+    MiraLog("user_profile_creation", f"进入节点：化妆专业度打分")
+    response = interrupt({"type": "interrupt", "content": "请给你的化妆专业度打分（0-10分）"}).get("text")
     return {
-        "user_profile": {"makeup_skill_level": response},
+        "basic_info": {"makeup_skill_level": response},
         "messages": [
-            AIMessage(content={"type": "text", "text": "请给你的化妆专业度打分（0-10分）"}),
-            HumanMessage(content={"type": "text", "text": response})
+            AIMessage(content="请给你的化妆专业度打分（0-10分）"),
+            HumanMessage(content=response)
         ]
     }
 
 # 5. 护肤专业度打分节点
 def skincare_skill_node(state: UserProfileEditState):
-    logging.info("[skincare_skill_node] called")
-    response = interrupt({"type": "interrupt", "content": "请给你的护肤专业度打分（0-10分）"})
+    MiraLog("user_profile_creation", f"进入节点：护肤专业度打分")
+    response = interrupt({"type": "interrupt", "content": "请给你的护肤专业度打分（0-10分）"}).get("text")
     return {
-        "user_profile": {"skincare_skill_level": response},
+        "basic_info": {"skincare_skill_level": response},
         "messages": [
-            AIMessage(content={"type": "text", "text": "请给你的护肤专业度打分（0-10分）"}),
-            HumanMessage(content={"type": "text", "text": response})
+            AIMessage(content="请给你的护肤专业度打分（0-10分）"),
+            HumanMessage(content=response)
         ]
     }
 
 # 6. 个人诉求与偏好收集节点
 def user_preferences_node(state: UserProfileEditState):
-    logging.info("[user_preferences_node] called")
-    response = interrupt({"type": "interrupt", "content": "请分享你在护肤和化妆中的诉求或偏好"})
+    MiraLog("user_profile_creation", f"进入节点：个人诉求与偏好收集")
+    response = interrupt({"type": "interrupt", "content": "请分享你在护肤和化妆中的诉求或偏好"}).get("text")
     return {
-        "user_profile": {"user_preferences": response},
+        "basic_info": {"user_preferences": response},
         "messages": [
-            AIMessage(content={"type": "text", "text": "请分享你在护肤和化妆中的诉求或偏好"}),
-            HumanMessage(content={"type": "text", "text": response})
+            AIMessage(content="请分享你在护肤和化妆中的诉求或偏好"),
+            HumanMessage(content=response)
         ]
     }
 
 # 7. 用户名采集节点
 def name_input_node(state: UserProfileEditState):
-    logging.info("[name_input_node] called")
-    response = interrupt({"type": "interrupt", "content": "请告诉我你的名字"})
+    MiraLog("user_profile_creation", f"进入节点：用户名采集")
+    response = interrupt({"type": "interrupt", "content": "请告诉我你的名字"}).get("text")
     return {
-        "user_profile": {"name": response},
+        "basic_info": {"name": response},
         "messages": [
-            AIMessage(content={"type": "text", "text": "请告诉我你的名字"}),
-            HumanMessage(content={"type": "text", "text": response})
+            AIMessage(content="请告诉我你的名字"),
+            HumanMessage(content=response)
         ]
     }
 
 # 8. 档案生成与保存节点
 def profile_generate_node(state: UserProfileEditState):
-    logging.info("[profile_generate_node] called")
+    MiraLog("user_profile_creation", f"进入节点：档案生成与保存")
     writer = get_stream_writer()
-    # 汇总所有信息，生成档案
-    msg = f"用户档案已生成：{state['user_profile']}"
-    writer({"type": "progress", "content": msg})
-    writer({"type": "structure", "content": state["user_profile"]})
+    # 合并 basic_info 和 user_profile
+    state["user_profile"] = {**state["basic_info"], **state["user_profile"]}
+    msg = f"您的用户档案已生成，请查看结构化展示区的结果"
+    writer({"type": "final", "content": {"response": msg, "markdown": state["basic_info"], "profile": state["user_profile"]}})
     return {
-        "user_profile": state["user_profile"],
         "messages": [
-            AIMessage(content={"type": "text", "text": "用户档案已生成：" + str(state["user_profile"])}),
+            AIMessage(content=msg)
         ]
     }
 

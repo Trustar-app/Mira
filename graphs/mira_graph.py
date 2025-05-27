@@ -43,7 +43,8 @@ def mira(state: MiraState) -> Command[Literal["user_profile_creation_subgraph", 
         buffer = ""
         for chunk in response:
             buffer += chunk
-            writer({"type": "chat", "content": buffer})
+            writer({"type": "progress", "content": buffer})
+        writer({"type": "final", "content": {"response": buffer}})
         return {"messages": [AIMessage(content=buffer)]}
 
 
