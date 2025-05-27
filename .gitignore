@@ -1,6 +1,5 @@
 .cursor/rules/mira.mdc
 .vscode/launch.json
 .venv/
-logs/*
 draft.py
 .env

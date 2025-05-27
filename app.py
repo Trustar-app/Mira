@@ -180,6 +180,5 @@ def build_demo():
     return demo
 
 demo = build_demo()
-
-if __name__ == "__main__":
-    demo.launch() 
+demo.queue()
+demo.launch(show_error=True, max_threads=10)
