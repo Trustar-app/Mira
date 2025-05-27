@@ -46,6 +46,17 @@ LOGGERS = {
         "propagate": False        # 是否传播到父级日志器
     },
     
+
+    # 产品识别模块日志
+    "product_recognition": {
+        "level": "DEBUG",         
+        "console": True,
+        "file": True,
+        "file_path": "logs/product_recognition.log",
+        "format": "[%(asctime)s][%(name)s][%(funcName)s %(lineno)d] %(message)s",  # 日志格式
+        "clear_log": True,  # 启动时清空日志文件
+        "propagate": False        # 是否传播到父级日志器
+    },
     # 其他模块日志配置
     
 }
@@ -58,6 +69,7 @@ SUPPORT_VIDEO_AUDIO = False
 OPENAI_API_KEY = "sk-4be3f2729fbf48f7b91dec9f2415cbd7"
 OPENAI_API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
+TAVILY_API_KEY = "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"
 # YouCam API 配置
 USE_YOUCAM_API = False
 YOUCAM_API_KEY = "YKzXjdtGCDstjn0A1qIflbTha6j5jIKd"
