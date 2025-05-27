@@ -7,7 +7,6 @@ import cv2
 import os
 import requests
 import json
-from config import YOUCAM_API_KEY, YOUCAM_SECRET_KEY, OPENAI_API_BASE, OPENAI_API_KEY
 from langchain_openai import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage
 from utils.loggers import MiraLog
@@ -18,15 +17,15 @@ import time
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
-def get_access_token():
+def get_access_token(config):
     """
     获取YouCam API的access_token。
     :return: access_token（str）
     """
     # 替换为实际 client_id 和 client_secret
-    client_id = YOUCAM_API_KEY
+    client_id = config['configurable'].get("youcam_api_key")
     client_secret_pem = f"""-----BEGIN PUBLIC KEY-----
-    {YOUCAM_SECRET_KEY}
+    {config['configurable'].get("youcam_secret_key")}
     -----END PUBLIC KEY-----"""
 
     # 1. 构造待加密的字符串
@@ -275,7 +274,7 @@ def poll_skin_analysis_task(task_id, access_token, max_retries=30):
     
     raise RuntimeError(f"轮询超时，任务可能仍在处理中")
 
-def skin_analysis(image_base64):
+def skin_analysis(image_base64, config):
     """
     调用 YouCam API 进行肤质分析。
     :param image_base64: base64编码的图像数据字符串
@@ -286,11 +285,11 @@ def skin_analysis(image_base64):
     MiraLog("skin_analysis", f"开始肤质分析，输入base64图片长度: {len(image_base64) if image_base64 else 0}")
     
     # 1. 获取 access_token
-    access_token = os.environ.get("YOUCAM_ACCESS_TOKEN")
+    access_token = config['configurable'].get("youcam_access_token")
     if not access_token:
-        access_token = get_access_token()
+        access_token = get_access_token(config)
         if access_token is not None:
-            os.environ["YOUCAM_ACCESS_TOKEN"] = access_token
+            config['configurable']['youcam_access_token'] = access_token
         else:
             MiraLog("skin_analysis", "获取access_token失败", "ERROR")
             raise RuntimeError("获取access_token失败")
@@ -325,7 +324,7 @@ def skin_analysis(image_base64):
 
 # AI肤质分析结果反馈生成
 
-def skin_feedback(data):
+def skin_feedback(data, config):
     """
     用大模型生成肤质分析反馈。
     :param data: 肤质分析原始结果
@@ -343,7 +342,7 @@ def skin_feedback(data):
         "用户肤质检测原始数据如下：\n"
         f"{data}"
     )
-    llm = ChatOpenAI(model_name="qwen2.5-vl-72b-instruct", temperature=0, openai_api_key=OPENAI_API_KEY, openai_api_base=OPENAI_API_BASE)
+    llm = ChatOpenAI(model_name=config['configurable'].get("chat_model_name"), temperature=0, openai_api_key=config['configurable'].get("chat_api_key"), openai_api_base=config['configurable'].get("chat_api_base"))
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(content="请生成反馈")
@@ -465,7 +464,7 @@ def extract_best_face_frame(video_base64):
             except:
                 pass 
 
-def skin_analysis_by_QwenYi(image_base64):
+def skin_analysis_by_QwenYi(image_base64, config):
     """
     调用 QwenYi API 进行肤质分析。
     :param image_base64: base64编码的图像数据字符串
@@ -474,8 +473,22 @@ def skin_analysis_by_QwenYi(image_base64):
     SYSTEM_PROMPT = (
         "你是一个专业的皮肤健康检测人员，请根据用户的照片检测结果，生成一个json形式的肤质检测结果。\n"
         "针对：斑点、皱纹、毛孔、发红、出油、痘痘、黑眼圈、眼袋、泪沟、皮肤紧致度 这10个维度，给出评分（0～10分，0分表示没有，10分表示非常严重）\n"
-        "针对：肤质类型 给出类型（油性，干性，中性，混合性）\n"
-        "请用json格式输出，不要输出任何解释。\n"
+        "请严格按照如下格式输出json，字段均为英文：\n"
+        "{\n"
+        "  \"skin_quality\": {\n"
+        "    \"spot\": 0-10,         # 斑点评分\n"
+        "    \"wrinkle\": 0-10,      # 皱纹评分\n" 
+        "    \"pore\": 0-10,         # 毛孔评分\n"
+        "    \"redness\": 0-10,      # 发红评分\n"
+        "    \"oiliness\": 0-10,     # 出油评分\n"
+        "    \"acne\": 0-10,         # 痘痘评分\n"
+        "    \"dark_circle\": 0-10,  # 黑眼圈评分\n"
+        "    \"eye_bag\": 0-10,      # 眼袋评分\n"
+        "    \"tear_trough\": 0-10,  # 泪沟评分\n"
+        "    \"firmness\": 0-10      # 皮肤紧致度评分\n"
+        "  }\n"
+        "}\n"
+        "所有评分字段为整数，不要输出任何解释。\n"
     )
 
     # 创建图文输入 message
@@ -489,7 +502,12 @@ def skin_analysis_by_QwenYi(image_base64):
         }
     ])
 
-    llm = ChatOpenAI(model_name="qwen2.5-vl-72b-instruct", temperature=0, openai_api_key=OPENAI_API_KEY, openai_api_base=OPENAI_API_BASE).with_structured_output(method="json_mode")
+    llm = ChatOpenAI(
+        model_name=config['configurable'].get("chat_model_name"), 
+        temperature=0, 
+        openai_api_key=config['configurable'].get("chat_api_key"), 
+        openai_api_base=config['configurable'].get("chat_api_base")
+    ).with_structured_output(method="json_mode")
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         image_message

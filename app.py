@@ -1,16 +1,23 @@
 # app.py
 from graphs.mira_graph import mira_graph
-from tools.common.formatters import (
-    format_messages, structure_to_frontend_outputs
-)
-from tools.common.utils import audio_to_text, video_to_text
+from tools.common.formatters import format_messages, dict_to_markdown
+from tools.common.utils import video_to_text
 import gradio as gr
 from langgraph.types import Command
 from utils.loggers import MiraLog
 import uuid
+from state import default_app_state
+from frontend.config_tab import render_config_tab
+from frontend.profile_tab import render_profile_tab
+from frontend.products_tab import render_products_tab
+from frontend.custom_css import custom_css
+from dotenv import load_dotenv
 import os
 
-def append_assistant_chat(chat, msg):
+load_dotenv()
+
+def combine_msg(chat, msg):
+    # 如果最后一条消息是进度信息，则可以覆盖
     if chat and chat[-1].get("type") == "progress":
         chat[-1]["content"] = msg["content"]
         chat[-1]["type"] = msg["type"]
@@ -18,145 +25,157 @@ def append_assistant_chat(chat, msg):
         chat.append({"role": "assistant", "content": msg["content"], "type": msg["type"]})
     return chat
 
-def process_user_input(video: str, audio, text, chat=None, thread_id=None, resume=None, profile=None, products=[]):
-    """
-    支持多轮对话记忆，thread_id用于区分不同会话。
-    兼容mira_graph.stream自定义输出结构{"type": , "content": ...}
-    """
-    markdown = ""
-    image = None
-    gallery = []
-    if products is None:
-        products = []
+def fill_config_with_env(config: dict) -> dict:
+    key_env_map = {
+        "chat_api_key": "CHAT_API_KEY",
+        "tavily_api_key": "TAVILY_API_KEY",
+    }
+    new_config = config.copy()
+    for key, env_name in key_env_map.items():
+        if new_config.get(key, "") == "default":
+            new_config[key] = os.getenv(env_name, "")
+    return new_config
 
-    if chat is None:
-        chat = []
-    # 用户输入加入chat
+def extract_profile_values(profile):
+    return [
+        profile.get('name', ''),
+        profile.get('gender', ''),
+        profile.get('age', ''),
+        profile.get('face_features', {}).get('face_shape', ''),
+        profile.get('face_features', {}).get('eyes', ''),
+        profile.get('face_features', {}).get('nose', ''),
+        profile.get('face_features', {}).get('mouth', ''),
+        profile.get('face_features', {}).get('eyebrows', ''),
+        profile.get('skin_color', ''),
+        profile.get('skin_type', ''),
+        profile.get('skin_quality', {}).get('spot', 0) or 0,
+        profile.get('skin_quality', {}).get('wrinkle', 0) or 0,
+        profile.get('skin_quality', {}).get('pore', 0) or 0,
+        profile.get('skin_quality', {}).get('redness', 0) or 0,
+        profile.get('skin_quality', {}).get('oiliness', 0) or 0,
+        profile.get('skin_quality', {}).get('acne', 0) or 0,
+        profile.get('skin_quality', {}).get('dark_circle', 0) or 0,
+        profile.get('skin_quality', {}).get('eye_bag', 0) or 0,
+        profile.get('skin_quality', {}).get('tear_trough', 0) or 0,
+        profile.get('skin_quality', {}).get('firmness', 0) or 0,
+        profile.get('makeup_skill_level', 0) or 0,
+        profile.get('skincare_skill_level', 0) or 0,
+        profile.get('user_preferences', ''),
+    ]
+
+def extract_products_values(products):
+    from frontend.products_tab import render_products_collection
+    choices = [(p['name'], i) for i, p in enumerate(products)]
+    return [
+        render_products_collection(products),
+        gr.update(choices=choices, value=None)
+    ]
+
+def extract_config_values(config):
+    return [
+        config.get('chat_api_key', ''),
+        config.get('chat_api_base', ''),
+        config.get('chat_model_name', ''),
+        config.get('chat_style', '温柔治愈') or '温柔治愈',
+        config.get('tavily_api_key', ''),
+        config.get('use_youcam', False),
+        config.get('youcam_api_key', ''),
+        config.get('youcam_secret_key', '')
+    ]
+
+def process_user_input(video, text, chat, state):
     if text:
         chat.append({"role": "user", "content": text, "type": "final"})
-    if audio:
-        chat.append({"role": "user", "content": gr.Audio(audio), "type": "final"})
     if video:
         chat.append({"role": "user", "content": gr.Video(video), "type": "final"})
-    yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
+    yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
-    # 多模态信息处理
-    multimodal_text = ""
-    if text:
-        multimodal_text += text
-    if audio:
-        progress_message = "正在处理语音输入..."
-        chat = append_assistant_chat(chat, {"content": progress_message, "type": "progress"})
-        yield chat, markdown, image, gallery, profile, products, progress_message, None, "", thread_id, resume
-        multimodal_text += audio_to_text(audio)
     if video:
         progress_message = "正在处理视频输入..."
-        chat = append_assistant_chat(chat, {"content": progress_message, "type": "progress"})
-        yield chat, markdown, image, gallery, profile, products, progress_message, None, "", thread_id, resume
-        multimodal_text += video_to_text(video)
-    
-    config = {"configurable": {"thread_id": thread_id}}
-
-    if resume:
-        resume = None
+        chat = combine_msg(chat, {"content": progress_message, "type": "progress"})
+        yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+        text += "\n<视频中说话内容>\n" + video_to_text(video) + "\n</视频中说话内容>"
+    if state.get('resume'):
         inputs = Command(
-            resume={"text": multimodal_text, "audio": audio, "video": video},
-            update={
-                "current_text": text,
-                "current_audio": audio,
-                "current_video": video,
-                "multimodal_text": multimodal_text,
-                "resume": True
+            resume={
+                "text": text,
+                "video": video,
             }
         )
+        state['resume'] = False
     else:
         inputs = {
-            "current_text": text,
-            "current_audio": audio,
-            "current_video": video,
-            "multimodal_text": multimodal_text,
-            "messages": format_messages(video, audio, text, multimodal_text),
-            "resume": False
+            "messages": format_messages(video, text),
+            "user_profile": state['profile'],
+            "products_directory": state['products'],
         }
-    for mode, step in mira_graph.stream(inputs, config, stream_mode=["custom", "updates"]):
+    
+    config_for_graph = fill_config_with_env(state['config'])
+    for mode, step in mira_graph.stream(inputs, {"configurable": config_for_graph}, stream_mode=["custom", "updates"]):
         if mode == "updates" and not "__interrupt__" in step:
             continue
         if "__interrupt__" in step:
             content = step.get("__interrupt__")[0].value.get("content")
-            # 中断信息，chat区只保留一条最新assistant进度
-            chat = append_assistant_chat(chat, {"content": content, "type": "final"})
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, "interrupt"
+            chat = combine_msg(chat, {"content": content, "type": "final"})
+            state['resume'] = True
+            yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
             break
-
         msg_type = step.get("type")
         content = step.get("content")
         MiraLog("app", f"msg_type: {msg_type}")
-        
         if msg_type == "progress":
-            # 进度信息，chat区只保留一条最新assistant进度
-            chat = append_assistant_chat(chat, {"content": content, "type": "progress"})
-            markdown, image, gallery = "", None, []
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume            
+            chat = combine_msg(chat, {"content": content, "type": "progress"})
+            yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
         elif msg_type == "final":
-            response, markdown, image, gallery, profile, product = structure_to_frontend_outputs(content)
-            MiraLog("app", f"response: {response}")
-            MiraLog("app", f"markdown: {markdown}")
-            MiraLog("app", f"image: {image}")
-            MiraLog("app", f"gallery: {gallery}")
-            MiraLog("app", f"profile: {profile}")
-            MiraLog("app", f"product: {product}")
-            chat = append_assistant_chat(chat, {"content": response, "type": "final"})
-            if product:
-                products.append(product)
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
+            markdown = dict_to_markdown(content['markdown']) if content.get('markdown') else ""
+            state['profile'].update(content['profile']) if content.get('profile') else None
+            state['products'].append(content['product']) if content.get('product') else None
+            chat = combine_msg(chat, {"content": content["response"], "type": "final"}) if content.get("response") else chat
+            yield chat, markdown, state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
         else:
-            yield chat, markdown, image, gallery, profile, products, None, None, "", thread_id, resume
+            yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
 def build_demo():
-    with gr.Blocks(theme=gr.themes.Soft(), css=".gradio-container {background: #f8f9fa;} .title {font-size:2.2em;font-weight:bold;color:#d63384;margin-bottom:0.2em;} .subtitle{color:#868e96;}") as demo:
+    with gr.Blocks(theme=gr.themes.Soft(), css=custom_css) as demo:
         gr.Markdown("<div class='title'>🎀 Mira 智能化妆镜</div><div class='subtitle'>AI赋能你的美丽日常</div>", elem_id="main-title")
-        thread_id_state = gr.State(str(uuid.uuid4()))  # 用于存储当前对话的thread_id
-        resume_state = gr.State(None)  # 用于存储中断信息
-        with gr.Row():
-            # 第一行：左-输入区，右-反馈区
-            with gr.Column(scale=1):
-                gr.Markdown("#### 📥 用户输入区")
-                video_in = gr.Video(sources=["webcam"], include_audio=True, label="录制视频（含音频）")
-                audio_in = gr.Audio(sources=["microphone"], label="语音输入")
-                text_in = gr.Textbox(label="文本输入", lines=2, placeholder="请输入你的问题或需求…")
-                submit_btn = gr.Button("提交", elem_id="submit-btn")
-                new_chat_btn = gr.Button("新建对话", elem_id="new-chat-btn")
-            with gr.Column(scale=2):
-                with gr.Row():
-                    with gr.Column():
-                        gr.Markdown("#### 🤖 AI对话区")
-                        chat_out = gr.Chatbot(label="AI对话", value=[], type="messages")
-                    with gr.Column():
-                        gr.Markdown("#### 🧾 结构化反馈区")
-                        markdown_out = gr.Markdown(label="结构化分析结果")
-                        image_out = gr.Image(label="分析图片")
-                        gallery_out = gr.Gallery(label="反馈图片集", columns=4)
-        with gr.Row():
-            # 第二行：左-用户档案，右-产品卡片集
-            with gr.Column():
-                gr.Markdown("#### 📦 用户档案")
-                profile_out = gr.Markdown("")
-            with gr.Column():
-                gr.Markdown("#### 💄 产品卡片集")
-                products_out = gr.Gallery(label="产品卡片集", value=[], columns=2)
-        # 事件绑定
+        app_state = gr.State(default_app_state())
+        with gr.Tab("💬 聊天"):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("#### 📥 用户输入区")
+                    video_in = gr.Video(sources=["webcam"], include_audio=True, label="录制视频（含音频）")
+                    text_in = gr.Textbox(label="文本输入", lines=2, placeholder="请输入你的问题或需求…")
+                    submit_btn = gr.Button("提交", elem_id="submit-btn")
+                    new_chat_btn = gr.Button("新建对话", elem_id="new-chat-btn")
+                with gr.Column(scale=3):
+                    with gr.Row():
+                        with gr.Column(scale=2):
+                            gr.Markdown("#### 🤖 AI对话区")
+                            chat_out = gr.Chatbot(label="AI对话", value=[], type="messages")
+                        with gr.Column(scale=1):
+                            gr.Markdown("#### 🧾 结构化反馈区")
+                            markdown_out = gr.Markdown(label="结构化分析结果", elem_id="feedback-md")
+                # 下面收集所有 tab 的控件
+        with gr.Tab("👤 用户档案"):
+            profile_widgets = render_profile_tab(app_state)
+        with gr.Tab("💄 产品卡片集"):
+            products_widgets = render_products_tab(app_state)
+        with gr.Tab("🎛 配置"):
+            config_widgets = render_config_tab(app_state)
+        # 主回调 outputs 绑定所有控件
         submit_btn.click(
             process_user_input,
-            inputs=[video_in, audio_in, text_in, chat_out, thread_id_state, resume_state, profile_out, products_out],
-            outputs=[chat_out, markdown_out, image_out, gallery_out, profile_out, products_out, video_in, audio_in, text_in, thread_id_state, resume_state]
+            inputs=[video_in, text_in, chat_out, app_state],
+            outputs=[chat_out, markdown_out, app_state, video_in, text_in] + profile_widgets + products_widgets + config_widgets
         )
-        # 新建对话按钮：重置所有输入输出，并生成新thread_id
-        def new_chat():
-            return [], "", None, [], "", [], None, None, "", str(uuid.uuid4()), None
+        def new_chat(state):
+            state['config']['thread_id'] = str(uuid.uuid4())
+            state['resume'] = False
+            return [], "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
         new_chat_btn.click(
             new_chat,
-            inputs=[],
-            outputs=[chat_out, markdown_out, image_out, gallery_out, profile_out, products_out, video_in, audio_in, text_in, thread_id_state, resume_state]
+            inputs=[app_state],
+            outputs=[chat_out, markdown_out, app_state, video_in, text_in] + profile_widgets + products_widgets + config_widgets
         )
     return demo
 

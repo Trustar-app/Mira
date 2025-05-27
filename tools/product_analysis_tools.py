@@ -1,9 +1,6 @@
-import base64
-import mimetypes
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
-from config import OPENAI_API_BASE, OPENAI_API_KEY
-import json
+from langchain_core.messages import HumanMessage
+
 
 def messages_to_text(messages):
     lines = []
@@ -33,7 +30,7 @@ def messages_to_text(messages):
         lines.append(f"{role}: {content}")
     return "\n".join(lines)
 
-def extract_structured_info_from_search(messages: list) -> dict:
+def extract_structured_info_from_search(messages: list, config) -> dict:
 
     # 1. 转为字符串
     history_text = messages_to_text(messages)
@@ -61,9 +58,9 @@ def extract_structured_info_from_search(messages: list) -> dict:
     )
     messages = [HumanMessage(content=prompt)]
     llm = ChatOpenAI(
-        model="qwen2.5-vl-72b-instruct",
-        openai_api_base=OPENAI_API_BASE,
-        openai_api_key=OPENAI_API_KEY,
+        model=config['configurable'].get("chat_model_name"),
+        openai_api_base=config['configurable'].get("chat_api_base"),
+        openai_api_key=config['configurable'].get("chat_api_key"),
         streaming=False
     ).with_structured_output(method="json_mode")
     response = llm.invoke(messages)

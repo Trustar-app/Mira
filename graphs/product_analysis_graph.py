@@ -8,13 +8,13 @@ from langgraph.graph import StateGraph, END, START
 from langgraph.types import interrupt
 from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.config import get_stream_writer
-from state import ProductAnalysisState
-from config import OPENAI_API_BASE, OPENAI_API_KEY, TAVILY_API_KEY
+from state import ProductAnalysisState, ConfigState
 from utils.loggers import MiraLog
 from tools.product_analysis_tools import extract_structured_info_from_search
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from typing import Annotated
+from langchain_core.runnables import RunnableConfig
 
 system_message = (
     "你是一位私人产品适配度分析专家，你的任务是基于用户提到的产品，完成如下步骤：\n"
@@ -24,26 +24,6 @@ system_message = (
     "4. 分析完成后，调用 add_product_to_directory 工具，询问用户是否将该产品加入个人产品目录。\n"
     "5. 无论用户是否加入，完成后直接结束对话。\n"
     "用户信息如下：\n{user_profile}\n"
-)
-
-# 工具模型实例
-# llm = ChatOpenAI(
-#     model="gpt-4o-2024-11-20",
-#     openai_api_base="https://api.ai-gaochao.cn/v1",
-#     openai_api_key="sk-OYhuRkOKEQu5YXp107140dC2E1F14dA1AaFe934b9294A10b",
-#     streaming=True
-# )
-
-llm = ChatOpenAI(
-    model="qwen2.5-vl-72b-instruct",
-    openai_api_base=OPENAI_API_BASE,
-    openai_api_key=OPENAI_API_KEY,
-    streaming=True
-)
-
-tool_search = TavilySearch(
-    tavily_api_key=TAVILY_API_KEY,
-    max_results=5
 )
 
 class InputCollectionInput(BaseModel):
@@ -68,35 +48,62 @@ def add_product_to_directory_tool() -> dict:
     """
     用户确认后将产品信息放入目录。
     """
+    # “是”、“好”、“添加”、“需要”
+    confirm_words = ["是", "好", "添加", "需要", "可以", "ok", "yes", "确定", "同意", "确认", "愿意"]
     confirm = interrupt({"type": "interrupt", "content": ""})
-    if "是" in confirm.get("text", "").lower():
+    # 如果用户输入的文本中包含 confirm_words 中的任意一个，则认为用户确认
+    if any(word in confirm.get("text", "").lower() for word in confirm_words):
         return "产品已加入目录"
     else:
         return "产品未加入目录"
 
-def extract_structured_info_node(state: ProductAnalysisState):
+def extract_structured_info_node(state: ProductAnalysisState, config: RunnableConfig):
     stream_writer = get_stream_writer()
     stream_writer({"type": "progress", "content": "正在抽取产品信息..."})
-    structured_info = extract_structured_info_from_search(state["messages"])
+    structured_info = extract_structured_info_from_search(state["messages"], config)
     state["product_structured_info"] = structured_info
     stream_writer({"type": "final", "content": {"product": structured_info}})
     return state
+
+class TavilySearchWithConfig(TavilySearch):
+    def _run(
+        self,
+        query: str,
+        config: RunnableConfig = None,
+        **kwargs
+    ):
+        # 如果有新的 key，动态替换
+        if config and hasattr(config, "tavily_api_key"):
+            self.api_wrapper.tavily_api_key = config.tavily_api_key
+        # 调用父类 _run
+        return super()._run(query, **kwargs)
+
+tool_search = TavilySearchWithConfig(
+    max_results=5
+)
 
 tool_node = ToolNode(
     tools=[tool_search, input_collection_tool, add_product_to_directory_tool],
     handle_tool_errors=True
 )
-llm_with_tools = llm.bind_tools([tool_search, input_collection_tool, add_product_to_directory_tool])
 
-def chatbot(state: ProductAnalysisState):
+
+def chatbot(state: ProductAnalysisState, config: RunnableConfig):
     MiraLog("product_analysis", "进入产品分析聊天机器人")
     stream_writer = get_stream_writer()
 
+    llm = ChatOpenAI(
+        model=config["configurable"].get("chat_model_name"),
+        openai_api_base=config["configurable"].get("chat_api_base"),
+        openai_api_key=config["configurable"].get("chat_api_key"),
+        streaming=True
+    )
+    llm_with_tools = llm.bind_tools([tool_search, input_collection_tool, add_product_to_directory_tool])
     messages = [
         SystemMessage(content=system_message.format(user_profile=state["user_profile"])),
         *state["messages"]
     ]
-    stream_writer({"type": "progress", "content": "正在理解产品需求..."})
+    stream_writer({"type": "progress", "content": "正在分析..."})
     content_buffer = ""
     first_chunk = True
     for chunk in llm_with_tools.stream(messages):
@@ -150,7 +157,7 @@ def tool_post_condition(state: ProductAnalysisState):
     return "chatbot"
 
 def build_product_graph():
-    graph = StateGraph(ProductAnalysisState)
+    graph = StateGraph(ProductAnalysisState, config_schema=ConfigState)
     # 主要节点
     graph.add_node("chatbot", chatbot)    
     graph.add_node("tools", tool_node)

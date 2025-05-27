@@ -1,35 +1,26 @@
-import os
-from config import OPENAI_API_KEY, OPENAI_API_BASE
 from langchain_openai import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage
-from moviepy.video.io.VideoFileClip import VideoFileClip
-import tempfile
-import speech_recognition as sr
-import os
+from langchain.schema import HumanMessage
 
 # 意图类别列表
 INTENT_CATEGORIES = [
     "聊天互动",
     "肤质检测",
     "创建用户档案",
-    "产品推荐",
     "产品分析",
-    "化妆引导",
-    "护肤引导",
-    "档案编辑"
+    "化妆或护肤引导"
 ]
 
 # 1. 多模态聊天 Agent
 # 输入: OpenAI 格式 messages（支持文本和视频）
-def multimodal_chat_agent(messages, streaming=False):
+def multimodal_chat_agent(messages, config, streaming=False):
     """
     多模态聊天 Agent，输入为（含文本、音频、视频），输出为回复文本。
     若streaming=True，则返回生成器，每次yield一个chunk，便于流式对接前端。
     """
     llm = ChatOpenAI(
-        openai_api_key=OPENAI_API_KEY,
-        openai_api_base=OPENAI_API_BASE,
-        model="qwen2.5-vl-72b-instruct",
+        openai_api_key=config['configurable'].get("chat_api_key"),
+        openai_api_base=config['configurable'].get("chat_api_base"),
+        model=config['configurable'].get("chat_model_name"),
         streaming=streaming
     )
     if streaming:
@@ -46,10 +37,11 @@ def multimodal_chat_agent(messages, streaming=False):
 # 2. 意图识别
 # 输入: 用户文本，输出: 意图类别
 # 使用 Qwen2.5-14B-Instruct
-def recognize_intent(text: str) -> str:
+def recognize_intent(content: list, config) -> str:
     """
     用 LLM 对文本进行意图识别，返回意图类别
     """
+    text = [item["text"] for item in content if item["type"] == "text"]
     prompt = f"""
 你是一个智能助手，请判断用户输入的意图属于下列哪一类，只需返回类别本身，不要返回其他内容：
 {INTENT_CATEGORIES}
@@ -61,9 +53,9 @@ def recognize_intent(text: str) -> str:
 请直接输出最匹配的类别。
 """
     llm = ChatOpenAI(
-        openai_api_key=OPENAI_API_KEY,
-        openai_api_base=OPENAI_API_BASE,
-        model="qwen2.5-14b-instruct"
+        openai_api_key=config['configurable'].get("chat_api_key"),
+        openai_api_base=config['configurable'].get("chat_api_base"),
+        model=config['configurable'].get("chat_model_name")
     )
     result = llm.invoke([HumanMessage(content=prompt)])
     # 只返回类别本身
@@ -74,10 +66,11 @@ def recognize_intent(text: str) -> str:
             return cat
     return "聊天互动"
 
-def recognize_intent_with_current_flow(text: str, current_flow: str) -> str:
+def recognize_intent_with_current_flow(content: list, current_flow: str, config) -> str:
     """
     用 LLM 根据当前用户输入文本和历史意图，判断是否需要继续当前意图，还是需要切换到其他意图。
     """
+    text = [item["text"] for item in content if item["type"] == "text"]
     prompt = f"""
     你是一个智能助手，请根据当前用户输入文本和历史意图，判断是否需要继续当前意图，还是需要切换到其他意图，意图类别如下：
     {INTENT_CATEGORIES}
@@ -89,9 +82,9 @@ def recognize_intent_with_current_flow(text: str, current_flow: str) -> str:
     请直接输出“继续”或其他意图类别。
     """
     llm = ChatOpenAI(
-        openai_api_key=OPENAI_API_KEY,
-        openai_api_base=OPENAI_API_BASE,
-        model="qwen2.5-14b-instruct"
+        openai_api_key=config['configurable'].get("chat_api_key"),
+        openai_api_base=config['configurable'].get("chat_api_base"),
+        model=config['configurable'].get("chat_model_name")
     )
     result = llm.invoke([HumanMessage(content=prompt)])
     intent = result.content.strip()
