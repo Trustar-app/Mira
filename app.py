@@ -1,4 +1,8 @@
 # app.py
+import sys
+import os
+print("当前工作目录（启动路径）:", os.getcwd())
+
 from graphs.mira_graph import mira_graph
 from tools.common.formatters import format_messages, dict_to_markdown
 from tools.common.utils import video_to_text
@@ -12,7 +16,6 @@ from frontend.profile_tab import render_profile_tab
 from frontend.products_tab import render_products_tab
 from frontend.custom_css import custom_css
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
