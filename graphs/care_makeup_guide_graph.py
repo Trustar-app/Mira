@@ -1,125 +1,187 @@
 """
 护肤/化妆引导子流程 Graph，节点实现如下。
 """
-import logging
 from langgraph.graph import StateGraph, END, START
 from state import CareMakeupGuideState
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
+from langchain_openai import ChatOpenAI
+from config import OPENAI_API_BASE, OPENAI_API_KEY
+from langchain_core.tools import tool
+from langchain_core.messages import SystemMessage, ToolMessage
+from langgraph.prebuilt import InjectedState, ToolNode
+from typing import Annotated
+from langgraph.types import Command
+from pydantic import BaseModel, Field
 
-# 1. 用户需求采集节点
-def user_intent_node(state: CareMakeupGuideState):
-    """
-    用户需求采集节点：判断用户是否明确表达需求，未表达则 interrupt 请求输入。
-    :param state: 当前 State
-    :return: (新 State, 进度消息)
-    """
-    # 若无 user_intent，则 interrupt
-    # 若有，解析 guide_type/scenario，进入下一节点
-    logging.info("[user_intent_node] called")
-    if not state.get("scenario"):
-        response = interrupt({"type": "interrupt", "content": "请描述你本次护肤/化妆的需求或场景。"})
-        state["scenario"] = response
-    return state
+llm = ChatOpenAI(
+    model="qwen3-235b-a22b",
+    openai_api_base=OPENAI_API_BASE,
+    openai_api_key=OPENAI_API_KEY,
+    streaming=True
+)
 
-# 2. 推荐与确认节点
-def recommend_and_confirm_steps_node(state: CareMakeupGuideState):
+@tool("generate_plan", return_direct=True, response_format="content_and_artifact")
+def generate_plan(state: Annotated[dict, InjectedState]):
     """
-    1. 调用 Agent，根据 user_intent/guide_type/scenario 生成推荐产品种类列表和分步流程（每步含产品和动作）。
-    2. 若用户有修改建议（user_feedback），Agent 结合建议重新生成推荐。
-    3. 推送推荐方案到前端，interrupt 等待用户“确认”或“修改建议”。
-    4. 若用户确认，进入分步引导；若有修改建议，循环本节点。
-    :param state: 当前 State
-    :return: (新 State, 进度消息)
+    生成护肤/化妆计划
     """
-    # 伪代码逻辑：
-    # if not state.recommended_steps or state.user_feedback:
-    #     调用 Agent 生成/更新推荐步骤
-    #     state.recommended_steps = agent_generate_steps(state.user_intent, state.guide_type, state.scenario, state.user_feedback)
-    # interrupt 推送推荐方案，等待用户输入
-    # if 用户输入“确认”，进入 step_guide_node
-    # if 用户输入“修改建议”，state.user_feedback = 用户输入，循环本节点
-    logging.info("[recommend_and_confirm_steps_node] called")
+    system_prompt = (
+        "你是一位专业的护肤与化妆计划生成助手。\n\n"
+        "请根据用户信息、产品收藏夹和用户历史对话，生成一份个性化的护肤或化妆方案。\n"
+        "返回的计划应包含以下字段，并以 **JSON 格式** 输出：\n"
+        "{{\n"
+        '  "type": "护肤" 或 "化妆",\n'
+        '  "steps": [\n'
+        "    {{\n"
+        '      "step_name": "步骤名称",\n'
+        '      "product_type": "产品种类，如洁面、爽肤水、粉底液等",\n'
+        '      "instructions": "操作说明",\n'
+        '      "notes": "注意事项"\n'
+        "    }},\n"
+        "    ... // 其他步骤\n"
+        "  ]\n"
+        "}}\n"
+        "```\n\n"
+        "【用户信息】：{user_profile}\n"
+        "【产品收藏夹】：{products_directory}\n"
+        "{plan_section}"
+    ).format(
+        user_profile=state.get("user_profile", "无"),
+        products_directory=state.get("products_directory", "无"),
+        plan_section=f"【当前计划】：{state['plan']}\n" if state.get("plan") else ""
+    )
+    llm = ChatOpenAI(
+        model="qwen2.5-vl-72b-instruct",
+        openai_api_base=OPENAI_API_BASE,
+        openai_api_key=OPENAI_API_KEY,
+        streaming=False
+    ).with_structured_output(method="json_mode")
+    msg = "完成计划生成，请向用户简要说明当前计划内容，并请求确认" if not state.get("plan") else "生成新计划，请向用户简要说明计划内容，并请求确认"
+    response = llm.invoke([SystemMessage(content=system_prompt)] + state.get("messages", []))
+    
+    return msg, {"plan": response}
+
+class InputCollectionInput(BaseModel):
+    query: str = Field(description="你对用户的请求或询问")
+
+@tool("request_user_input", args_schema=InputCollectionInput, return_direct=True)
+def request_user_input(query: str):
+    """
+    请求用户输入
+    """
+    response = interrupt({"type": "interrupt", "content": query})
+    content = []
+    if response.get("text"):
+        content.append({"type": "text", "text": response.get("text")})
+    if response.get("video"):
+        content.append({"type": "video_url", "video_url": response.get("video")})
+    return content
+
+llm_with_tools = llm.bind_tools([generate_plan, request_user_input])
+
+tool_node = ToolNode(
+    tools=[generate_plan, request_user_input],
+    handle_tool_errors=False
+)
+
+# 节点实现
+def chatbot(state: CareMakeupGuideState):
+    stream_writer = get_stream_writer()
+    # 构建系统 prompt
+    system_prompt = (
+        "你是一位专业的护肤与化妆指导助手，负责根据用户的具体需求和个人信息提供个性化方案。\n\n"
+        "请遵循以下流程完成你的任务：\n"
+        "1. 如果用户尚未提出明确需求，请调用 request_user_input 工具引导其简要说明当前需求（如：约会妆容、日常护肤、特殊场合等）。\n"
+        "2. 一旦获取到简要的需求，就请调用 generate_plan 工具为其制定一套完整的护肤或化妆方案，不要多轮询问用户需求，请直接生成方案。\n"
+        "3. 列出完整方案后，请调用 request_user_input 工具征询用户是否确认：\n"
+        "   - 若确认，则进入逐步引导流程；\n"
+        "   - 若不确认，请根据用户反馈重新调用 generate_plan 工具制定方案。\n"
+        "4. 在逐步引导过程中：\n"
+        "   - 每一步都需提示用户上传视频；\n"
+        "   - 针对上传内容给予专业反馈，并继续下一步。\n"
+        "5. 全部步骤完成后，请对整个体验进行总结，并给予积极鼓励。\n\n"
+        "每次只能调用一个工具。"
+        "以下是当前计划(如果还未生成计划，请忽略)：\n"
+        "{plan}\n"
+    ).format(
+        plan=state.get("plan", "无")
+    )
+    messages = [SystemMessage(content=system_prompt), *state.get("messages", [])]
+    stream_writer({"type": "progress", "content": "正在分析用户输入..."})
+    content_buffer = ""
+    first_chunk = True
+    for chunk in llm_with_tools.stream(messages):
+        if hasattr(chunk, "content") and chunk.content:
+            content_buffer += chunk.content
+            stream_writer({"type": "progress", "content": content_buffer})
+        if first_chunk:
+            buffer = chunk
+            first_chunk = False
+        else:
+            buffer = buffer + chunk
+    if content_buffer:
+        stream_writer({"type": "final", "content": {"response": content_buffer}})
+    return {"messages": buffer}
+
+def post_tool_node(state: CareMakeupGuideState):
     writer = get_stream_writer()
-    # mock: 实际应调用 agent_generate_steps 工具
-    if not state.get("recommended_steps"):
-        state["recommended_steps"] = [
-            {"step": "洁面", "desc": "用温水洁面"},
-            {"step": "爽肤水", "desc": "轻拍爽肤水"}
-        ]
-    writer({"type": "progress", "content": f"推荐流程：{state['recommended_steps']}"})
-    # interrupt 等待用户确认
-    response = interrupt({"type": "interrupt", "content": "请确认推荐流程，或提出修改建议。"})
-    # mock: 只要有响应就进入下一步
-    return state
+    tool_message = state.get("messages", [])[-1]
+    if hasattr(tool_message, "artifact") and tool_message.artifact:
+        writer({"type": "final", "content": {"markdown": tool_message.artifact}})
+        return {**tool_message.artifact}
 
-# 3. 分步骤引导节点
-def step_guide_and_feedback_node(state: CareMakeupGuideState):
-    """
-    1. 取当前步骤 recommended_steps[current_step_index]，Mira文本引导用户操作，interrupt 等待用户上传视频。
-    2. 分析用户视频，给出反馈，interrupt 等待用户“完成/遇到问题/补充说明”。
-    3. 若用户完成，current_step_index+1，循环本节点；否则可人工干预或补充说明。
-    4. 所有步骤完成后，进入 summary_node。
-    :param state: 当前 State
-    :return: (新 State, 进度消息)
-    """
-    # 伪代码逻辑：
-    # if state.current_step_index < len(state.recommended_steps):
-    #     step = state.recommended_steps[state.current_step_index]
-    #     interrupt 引导用户操作，等待视频
-    #     分析视频，给反馈
-    #     interrupt 等待用户反馈
-    #     if 用户反馈“完成”:
-    #         state.current_step_index += 1
-    #         循环本节点
-    #     else:
-    #         可人工干预或补充说明
-    # else:
-    #     进入 summary_node
-    logging.info("[step_guide_and_feedback_node] called")
-    writer = get_stream_writer()
-    idx = state.get("current_step_index", 0)
-    steps = state.get("recommended_steps", [])
-    if idx < len(steps):
-        step = steps[idx]
-        writer({"type": "progress", "content": f"第{idx+1}步：{step['step']} - {step['desc']}"})
-        # interrupt 等待用户上传视频
-        response = interrupt({"type": "interrupt", "content": f"请上传你完成{step['step']}的操作视频。"})
-        # mock: 实际应调用 analyze_user_video 工具
-        feedback = "动作标准，很棒！"
-        state["current_step_feedback"] = feedback
-        writer({"type": "progress", "content": feedback})
-        # interrupt 等待用户反馈
-        response2 = interrupt({"type": "interrupt", "content": "本步骤已完成？如遇问题请补充说明。"})
-        # mock: 只要有响应就进入下一步
-        state["current_step_index"] = idx + 1
-        return state
-    else:
-        return state
 
-# 4. 总结节点
-def summary_node(state: CareMakeupGuideState):
-    """
-    结束节点：Mira总结本次体验，鼓励用户。
-    :param state: 当前 State
-    :return: (新 State, 反馈消息)
-    """
-    logging.info("[summary_node] called")
+# def generate_plan_node(state: CareMakeupGuideState):
+#     writer = get_stream_writer()
+#     writer({"type": "progress", "content": "正在生成计划..."})
+#     response = generate_plan(state)
+#     writer({"type": "final", "content": {"markdown": response}})
+#     msg = "完成计划生成，等待用户确认" if not state.get("plan") else "生成新计划，等待用户确认"
+#     return {
+#         "messages": [
+#             ToolMessage(content=msg, tool_call_id=state.get("messages", [])[-1].tool_calls[0]["id"])
+#         ],
+#         "plan": response
+#     }
+
+# def request_user_input_node(state: CareMakeupGuideState):
+#     # 从上一条信息中的工具调用中获取 query 参数
+#     query = state.get("messages", [])[-1].tool_calls[0]["args"]["query"]
+#     response = request_user_input(query)
+#     return {
+#         "messages": [
+#             ToolMessage(content=response, tool_call_id=state.get("messages", [])[-1].tool_calls[0]["id"])
+#         ]
+#     }
+
+def chatbot_condition(state: CareMakeupGuideState):
     writer = get_stream_writer()
-    writer({"type": "progress", "content": "护肤/化妆流程已完成，Mira为你点赞！"})
-    return state
+    messages = state.get("messages", [])
+    if not messages:
+        return END
+    last_msg = messages[-1]
+    # 判断是否有 tool_call
+    if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+        tool_name = last_msg.tool_calls[0]['name']
+        if tool_name == "generate_plan":
+            writer({"type": "progress", "content": "正在生成计划..."})
+        return "tool_node"
+    return END  # 或下一个节点
 
 def build_care_makeup_guide_graph():
     graph = StateGraph(CareMakeupGuideState)
-    graph.add_node("user_intent", user_intent_node)
-    graph.add_node("recommend_and_confirm_steps", recommend_and_confirm_steps_node)
-    graph.add_node("step_guide_and_feedback", step_guide_and_feedback_node)
-    graph.add_node("summary", summary_node)
-    graph.add_edge(START, "user_intent")
-    graph.add_edge("user_intent", "recommend_and_confirm_steps")
-    graph.add_edge("recommend_and_confirm_steps", "step_guide_and_feedback")
-    graph.add_edge("step_guide_and_feedback", "summary")
-    graph.add_edge("summary", END)
+    graph.add_node("chatbot", chatbot)
+    graph.add_node("tool_node", tool_node)
+    graph.add_node("post_tool_node", post_tool_node)
+
+    graph.add_edge(START, "chatbot")
+    graph.add_conditional_edges("chatbot", chatbot_condition, {
+        "tool_node": "tool_node",
+        END: END
+    })
+    graph.add_edge("tool_node", "post_tool_node")
+    graph.add_edge("post_tool_node", "chatbot")
     return graph.compile()
 
 care_makeup_guide_graph = build_care_makeup_guide_graph()
