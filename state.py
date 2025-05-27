@@ -19,6 +19,14 @@ def dict_merge_reducer(old, new):
     merged = {**old, **new}
     return merged
 
+def list_merge_reducer(old, new):
+    if old is None:
+        old = []
+    if new is None:
+        new = []
+    merged = old + new
+    return merged
+
 # 前端 State 定义
 class FaceFeature(TypedDict, total=False):
     face_shape: str  # 脸型 （方脸、圆脸、瓜子脸、方圆脸、鹅蛋脸、高颧骨）
@@ -105,15 +113,15 @@ def default_products():
 def default_config_state():
     return {
         "thread_id": str(uuid.uuid4()),
-        "chat_api_key": os.getenv("CHAT_API_KEY", ""),
+        "chat_api_key": "default",
         "chat_api_base": os.getenv("CHAT_API_BASE", ""),
         "chat_model_name": os.getenv("CHAT_MODEL_NAME", ""),
         "audio_model_name": os.getenv("AUDIO_MODEL_NAME", ""),
         "chat_style": os.getenv("CHAT_STYLE", ""), 
-        "tavily_api_key": os.getenv("TAVILY_API_KEY", ""),
+        "tavily_api_key": "default",
         "use_youcam": os.getenv("USE_YOUCAM_API", "False") == "True",
-        "youcam_api_key": os.getenv("YOUCAM_API_KEY", ""),
-        "youcam_secret_key": os.getenv("YOUCAM_SECRET_KEY", "")
+        "youcam_api_key": "",
+        "youcam_secret_key": ""
     }
 
 class ConfigState(TypedDict, total=False):
@@ -136,7 +144,8 @@ def default_app_state():
     return {
         "config": default_config_state(),
         "profile": default_user_profile(),
-        "products": default_products()
+        "products": default_products(),
+        "resume": False
     }
 
 class AppState(TypedDict, total=False):
@@ -144,19 +153,19 @@ class AppState(TypedDict, total=False):
     profile: UserProfile
     products: list[Product]
 
-    resume: bool = False  # 是否刚刚中断对话，需要恢复对话
+    resume: bool  # 是否刚刚中断对话，需要恢复对话
 
 
 # 后端 LangGraph State 
 class MiraState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
-    products_directory: Annotated[list[Product], dict_merge_reducer]
+    products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
     current_flow: Optional[str]
 
 class SkinAnalysisState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
-    products_directory: Annotated[list[Product], dict_merge_reducer]
+    products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
 
     # 中间产物
@@ -169,7 +178,7 @@ class SkinAnalysisState(TypedDict, total=False):
 
 class UserProfileEditState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
-    products_directory: Annotated[list[Product], dict_merge_reducer]
+    products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
 
     basic_info: Annotated[Dict[str, Any], dict_merge_reducer]
@@ -177,7 +186,7 @@ class UserProfileEditState(TypedDict, total=False):
 
 class CareMakeupGuideState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
-    products_directory: Annotated[list[Product], dict_merge_reducer]
+    products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
 
     plan: Optional[str] # 护肤/化妆计划
@@ -185,7 +194,7 @@ class CareMakeupGuideState(TypedDict, total=False):
 
 class ProductAnalysisState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
-    products_directory: Annotated[list[Product], dict_merge_reducer]
+    products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
 
     # 中间产物

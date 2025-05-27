@@ -58,3 +58,4 @@ graphs/__pycache__/user_profile_creation_graph.cpython-311.pyc
 graphs/__pycache__/mira_graph.cpython-311.pyc
 graphs/__pycache__/skin_analysis_graph.cpython-311.pyc
 graphs/__pycache__/user_profile_creation_graph.cpython-311.pyc
+.env

@@ -13,14 +13,12 @@ from graphs.care_makeup_guide_graph import care_makeup_guide_graph
 from utils.loggers import MiraLog
 from typing_extensions import Literal
 
-current_flow = None
 
 intent_to_subgraph = {
     "创建用户档案": "user_profile_creation_subgraph",
     "肤质检测": "skin_analysis_subgraph",
     "产品分析": "product_analysis_subgraph",
-    "化妆引导": "care_makeup_guide_subgraph",
-    "护肤引导": "care_makeup_guide_subgraph",
+    "化妆或护肤引导": "care_makeup_guide_subgraph",
 }
 
 # 多模态意图识别与流程调度节点
@@ -30,7 +28,7 @@ def mira(state: MiraState, config: RunnableConfig) -> Command[Literal["user_prof
     """
     writer = get_stream_writer()
     writer({"type": "progress", "content": "正在识别意图..."})
-    intent = recognize_intent(state["messages"][-1].content["text"], config)
+    intent = recognize_intent(state["messages"][-1].content, config)
     MiraLog("mira_graph", f"意图识别结果: {intent}")
     
     if intent in intent_to_subgraph:
@@ -69,7 +67,7 @@ def build_main_graph():
 
 def call_skin_analysis_subgraph(state: MiraState, config: RunnableConfig):
     if state.get("resume", False):
-        intent = recognize_intent_with_current_flow(state["multimodal_text"], state.get("current_flow"), config)
+        intent = recognize_intent_with_current_flow(state["messages"][-1].content, state.get("current_flow"), config)
         if intent != state.get("current_flow"):
             return Command(goto=intent_to_subgraph[intent])
 
@@ -87,7 +85,7 @@ def call_skin_analysis_subgraph(state: MiraState, config: RunnableConfig):
 
 def call_care_makeup_guide_subgraph(state: MiraState, config: RunnableConfig):
     if state.get("resume", False):
-        intent = recognize_intent_with_current_flow(state["multimodal_text"], state.get("current_flow"), config)
+        intent = recognize_intent_with_current_flow(state["messages"][-1].content, state.get("current_flow"), config)
         if intent != state.get("current_flow"):
             return Command(goto=intent_to_subgraph[intent], update={"current_flow": intent, "resume": False})
         
@@ -105,7 +103,7 @@ def call_care_makeup_guide_subgraph(state: MiraState, config: RunnableConfig):
 
 def call_product_analysis_subgraph(state: MiraState, config: RunnableConfig):
     if state.get("resume", False):
-        intent = recognize_intent_with_current_flow(state["multimodal_text"], state.get("current_flow"), config)
+        intent = recognize_intent_with_current_flow(state["messages"][-1].content, state.get("current_flow"), config)
         if intent != state.get("current_flow"):
             return Command(goto=intent_to_subgraph[intent], update={"current_flow": intent, "resume": False})
         
@@ -124,7 +122,7 @@ def call_product_analysis_subgraph(state: MiraState, config: RunnableConfig):
 
 def call_user_profile_creation_subgraph(state: MiraState, config: RunnableConfig):
     if state.get("resume", False):
-        intent = recognize_intent_with_current_flow(state["multimodal_text"], state.get("current_flow"), config)
+        intent = recognize_intent_with_current_flow(state["messages"][-1].content, state.get("current_flow"), config)
         if intent != state.get("current_flow"):
             return Command(goto=intent_to_subgraph[intent], update={"current_flow": intent, "resume": False})
         

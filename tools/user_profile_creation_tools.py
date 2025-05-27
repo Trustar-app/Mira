@@ -31,7 +31,7 @@ def analyze_face_features_with_llm(video_path, config) -> dict:
         "    - 嘴巴（mouth）：大嘴、小嘴\n"
         "    - 眉毛（eyebrows）：浓眉、淡眉\n"
         "2. 肤色（skin_color）：黄1白、黄2白、黑皮、白皮\n"
-        "3. 肤质标签（skin_quality）：痘肌、黑眼圈、敏感肌、黑头、毛孔粗大、干皮、油皮、混干皮、混油皮、色斑、皮肤暗沉\n"
+        "3. 肤质标签（skin_type）：痘肌、黑眼圈、敏感肌、黑头、毛孔粗大、干皮、油皮、混干皮、混油皮、色斑、皮肤暗沉\n"
         "\n"
         "请严格按照上述标签进行面部特征识别和 AI 打标，并输出如下 JSON 格式：\n"
         "{\n"
@@ -43,9 +43,9 @@ def analyze_face_features_with_llm(video_path, config) -> dict:
         '    "eyebrows": ""\n'
         "  },\n"
         '  "skin_color": "",\n'
-        '  "skin_quality": []\n'
+        '  "skin_type": []\n'
         "}\n"
-        "其中 skin_quality 字段为数组，可多选。\n"
+        "其中 skin_type 字段为数组，可多选。\n"
         "分析时请确保每个字段都给出最符合实际的视频特征标签。"
         f"\n视频内容：{video_path}"
     )
@@ -54,9 +54,9 @@ def analyze_face_features_with_llm(video_path, config) -> dict:
         {"type": "video_url", "video_url": {"url": f"data:{mime_type};base64,{base64_video}"}}
     ])]
     llm = ChatOpenAI(
-        model=config.chat_model_name,
-        openai_api_base=config.chat_api_base,
-        openai_api_key=config.chat_api_key,
+        model=config['configurable'].get("chat_model_name"),
+        openai_api_base=config['configurable'].get("chat_api_base"),
+        openai_api_key=config['configurable'].get("chat_api_key"),
         streaming=False
     ).with_structured_output(method="json_mode")
     response = llm.invoke(messages)

@@ -58,31 +58,6 @@ def format_messages(video, text):
     
     return messages
 
-def structure_to_frontend_outputs(content):
-    """
-    将任意 State 转换为前端结构化展示区所需的 (markdown, image, gallery, profile, products, ...)
-    """
-    response = ""
-    markdown = None
-    image = None
-    gallery = []
-    profile = ""
-    product = ""
-    if content.get("response"):
-        response = content["response"]
-    if content.get("markdown"): # 对 dict 类型做优美的格式化处理
-        markdown = dict_to_markdown(content["markdown"])
-    if content.get("image"):
-        image = content["image"]
-    if content.get("gallery"):
-        gallery = content["gallery"]
-    if content.get("profile"):
-        profile = dict_to_markdown(content["profile"])
-    if content.get("product"):
-        product = format_product(content["product"])
-
-    return response, markdown, image, gallery, profile, product
-
 def format_skin_check(skin_state):
     """
     格式化肤质检测结果
@@ -140,6 +115,7 @@ def dict_to_markdown(d, indent=0):
     markdown = ""
     prefix = "  " * indent  # 两个空格缩进
     for key, value in d.items():
+        key = en_to_cn(key)
         if isinstance(value, dict):
             markdown += f"{prefix}- **{key}**:\n\n"
             markdown += dict_to_markdown(value, indent + 1)
@@ -154,3 +130,43 @@ def dict_to_markdown(d, indent=0):
             markdown += f"{prefix}- **{key}**: {value}\n\n"
     return markdown
 
+# 英文key转中文
+def en_to_cn(key):
+    en_to_cn_dict = {
+        "name": "姓名",
+        "gender": "性别",
+        "age": "年龄",
+        "skin_color": "肤色",
+        "skin_type": "肤质类型",
+
+        "face_features": "面部特征",
+        "face_shape": "脸型",
+        "eyes": "眼睛",
+        "nose": "鼻子",
+        "mouth": "嘴巴",
+        "eyebrows": "眉毛",
+        "skin_quality": "肤质评分",
+        "spot": "斑点评分",
+        "wrinkle": "皱纹评分",
+        "pore": "毛孔评分",
+        "redness": "发红评分",
+        "oiliness": "出油评分",
+        "acne": "痘痘评分",
+        "dark_circle": "黑眼圈评分",
+        "eye_bag": "眼袋评分",
+        "tear_trough": "泪沟评分",
+        "firmness": "皮肤紧致度评分",
+
+        "makeup_skill_level": "化妆能力",
+        "skincare_skill_level": "护肤能力",
+        "user_preferences": "个人诉求与偏好",
+
+        "image_url": "产品图片",
+        "name": "产品名称",
+        "category": "产品分类",
+        "brand": "产品品牌",
+        "ingredients": "成分",
+        "effects": "功效",
+        "description": "备注",
+    }
+    return en_to_cn_dict.get(key, key)

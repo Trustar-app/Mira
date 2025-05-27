@@ -26,15 +26,6 @@ system_message = (
     "用户信息如下：\n{user_profile}\n"
 )
 
-# 工具模型实例
-# llm = ChatOpenAI(
-#     model="gpt-4o-2024-11-20",
-#     openai_api_base="https://api.ai-gaochao.cn/v1",
-#     openai_api_key="sk-OYhuRkOKEQu5YXp107140dC2E1F14dA1AaFe934b9294A10b",
-#     streaming=True
-# )
-
-
 class InputCollectionInput(BaseModel):
     query: str = Field(description="你的询问")
 
@@ -57,16 +48,19 @@ def add_product_to_directory_tool() -> dict:
     """
     用户确认后将产品信息放入目录。
     """
+    # “是”、“好”、“添加”、“需要”
+    confirm_words = ["是", "好", "添加", "需要", "可以", "ok", "yes", "确定", "同意", "确认", "愿意"]
     confirm = interrupt({"type": "interrupt", "content": ""})
-    if "是" in confirm.get("text", "").lower():
+    # 如果用户输入的文本中包含 confirm_words 中的任意一个，则认为用户确认
+    if any(word in confirm.get("text", "").lower() for word in confirm_words):
         return "产品已加入目录"
     else:
         return "产品未加入目录"
 
-def extract_structured_info_node(state: ProductAnalysisState):
+def extract_structured_info_node(state: ProductAnalysisState, config: RunnableConfig):
     stream_writer = get_stream_writer()
     stream_writer({"type": "progress", "content": "正在抽取产品信息..."})
-    structured_info = extract_structured_info_from_search(state["messages"])
+    structured_info = extract_structured_info_from_search(state["messages"], config)
     state["product_structured_info"] = structured_info
     stream_writer({"type": "final", "content": {"product": structured_info}})
     return state
@@ -99,9 +93,9 @@ def chatbot(state: ProductAnalysisState, config: RunnableConfig):
     stream_writer = get_stream_writer()
 
     llm = ChatOpenAI(
-        model=config.chat_model_name,
-        openai_api_base=config.chat_api_base,
-        openai_api_key=config.chat_api_key,
+        model=config["configurable"].get("chat_model_name"),
+        openai_api_base=config["configurable"].get("chat_api_base"),
+        openai_api_key=config["configurable"].get("chat_api_key"),
         streaming=True
     )
     llm_with_tools = llm.bind_tools([tool_search, input_collection_tool, add_product_to_directory_tool])
@@ -109,7 +103,7 @@ def chatbot(state: ProductAnalysisState, config: RunnableConfig):
         SystemMessage(content=system_message.format(user_profile=state["user_profile"])),
         *state["messages"]
     ]
-    stream_writer({"type": "progress", "content": "正在理解产品需求..."})
+    stream_writer({"type": "progress", "content": "正在分析..."})
     content_buffer = ""
     first_chunk = True
     for chunk in llm_with_tools.stream(messages):

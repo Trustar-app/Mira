@@ -45,9 +45,9 @@ def generate_plan(state: Annotated[dict, InjectedState], config: RunnableConfig)
         plan_section=f"【当前计划】：{state['plan']}\n" if state.get("plan") else ""
     )
     llm = ChatOpenAI(
-        model=config.chat_model_name,
-        openai_api_base=config.chat_api_base,
-        openai_api_key=config.chat_api_key,
+        model=config["configurable"].get("chat_model_name"),
+        openai_api_base=config["configurable"].get("chat_api_base"),
+        openai_api_key=config["configurable"].get("chat_api_key"),
         streaming=False
     ).with_structured_output(method="json_mode")
     msg = "完成计划生成，请向用户简要说明当前计划内容，并请求确认" if not state.get("plan") else "生成新计划，请向用户简要说明计划内容，并请求确认"
@@ -104,8 +104,8 @@ def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
     first_chunk = True
     llm = ChatOpenAI(
         model="qwen3-235b-a22b",
-        openai_api_base=config.chat_api_base,
-        openai_api_key=config.chat_api_key,
+        openai_api_base=config["configurable"].get("chat_api_base"),
+        openai_api_key=config["configurable"].get("chat_api_key"),
         streaming=True
     )
     llm_with_tools = llm.bind_tools([generate_plan, request_user_input])

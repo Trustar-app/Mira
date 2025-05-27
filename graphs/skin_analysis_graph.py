@@ -19,29 +19,27 @@ def wait_for_video_node(state: SkinAnalysisState):
     :param state: 当前 State
     :return: (新 State, 进度消息)
     """
-    # 检查 user_video，若无则返回 progress/error
-    # 若有则返回 {"progress": "收到视频，准备分析", ...}
     MiraLog("skin_analysis", f"进入肤质检测子图")
-    video = state["current_video"]
 
     # 将video转成base64
-    if not video or not os.path.exists(video):
+    if state["messages"][-1].content[0]["type"] != "video_url":
         while True:
-            MiraLog("skin_analysis", f"肤质检测的视频输入不存在: {video}")
+            MiraLog("skin_analysis", f"肤质检测的视频输入不存在")
             response = interrupt({"type": "interrupt", "content": "请上传面部视频以进行肤质检测。"})
             video = response.get("video")
             if video and os.path.exists(video):
-                state["current_video"] = video
                 break
-    try:
-        with open(video, "rb") as video_file:
-            video_bytes = video_file.read()
-            video_base64 = base64.b64encode(video_bytes).decode('utf-8')
-            state["current_video_base64"] = video_base64
-            MiraLog("skin_analysis", f"视频转换为base64成功，路径: {video}, 转换后长度: {len(video_base64)}")
-    except Exception as e:
-        MiraLog("skin_analysis", f"视频转换为base64失败: {e}", "ERROR")
-
+        try:
+            with open(video, "rb") as video_file:
+                video_bytes = video_file.read()
+                video_base64 = base64.b64encode(video_bytes).decode('utf-8')
+                state["current_video_base64"] = video_base64
+                MiraLog("skin_analysis", f"视频转换为base64成功，路径: {video}, 转换后长度: {len(video_base64)}")
+        except Exception as e:
+            MiraLog("skin_analysis", f"视频转换为base64失败: {e}", "ERROR")
+    else:
+        video_url = state["messages"][-1].content[0]["video_url"]
+        state["current_video_base64"] = video_url
     return state
 
 # 2. 视频分析节点
@@ -63,7 +61,6 @@ def video_analysis_node(state: SkinAnalysisState):
                 response = interrupt({"type": "interrupt", "content": "未检测到人脸，请重新输入视频。"})
                 video = response.get("video")
                 if video and os.path.exists(video):
-                    state["current_video"] = video
                     break
             try:
                 with open(video, "rb") as video_file:
@@ -104,11 +101,11 @@ def node_skin_analysis(state: SkinAnalysisState, config: RunnableConfig):
     image_base64 = state["best_face_image"]
 
     writer({"type": "progress", "content": "正在进行肤质AI检测..."})
-    if config.use_youcam:
+    if config["configurable"].get("use_youcam"):
         skin_analysis_result = skin_analysis(image_base64, config)
     else:
         skin_analysis_result = skin_analysis_by_QwenYi(image_base64, config)
-
+    state["user_profile"]["skin_quality"] = skin_analysis_result.get("skin_quality")
     state["skin_analysis_result"] = skin_analysis_result
     return state
 
@@ -130,7 +127,7 @@ def node_result_feedback(state: SkinAnalysisState, config: RunnableConfig):
         analysis_report += chunk
         writer({"type": "progress", "content": analysis_report})
     state["analysis_report"] = analysis_report
-    writer({"type": "final", "content": {"response": analysis_report, "markdown": state["skin_analysis_result"]}})
+    writer({"type": "final", "content": {"response": analysis_report, "markdown": state["skin_analysis_result"], "profile": state["user_profile"]}})
     return state
 
 def build_skincare_graph():

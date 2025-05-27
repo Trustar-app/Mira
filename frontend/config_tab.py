@@ -5,9 +5,9 @@ def render_config_tab(app_state):
     with gr.Column():
         # 模型设置
         gr.Markdown("### 🤖 模型设置")
-        gr.Markdown("<a href='https://bailian.console.aliyun.com/' target='_blank'>阿里百炼</a> 获取 API Key、Base URL、模型名称。")
+        gr.Markdown("[如果默认 API 失效，请前往<a href='https://bailian.console.aliyun.com/' target='_blank'>阿里百炼</a> 获取新 API Key，API不会上传]")
         with gr.Row():
-            chat_api_key = gr.Textbox(label="聊天模型的 API Key", type="password", value=config.get('chat_api_key', ''))
+            chat_api_key = gr.Textbox(label="聊天模型的 API Key",value=config.get('chat_api_key', ''))
             chat_api_base = gr.Textbox(label="聊天模型的 Base URL", value=config.get('chat_api_base', ''))
         with gr.Row():
             chat_model_name = gr.Textbox(label="聊天模型的模型名称", value=config.get('chat_model_name', ''))
@@ -19,14 +19,14 @@ def render_config_tab(app_state):
         # 工具设置
         gr.Markdown("### 🛠️ 工具设置")
         # Tavily 搜索工具
-        gr.Markdown("Tavily搜索工具（<a href='https://app.tavily.com/home' target='_blank'>Tavily官网</a> 获取 API Key）")
-        tavily_api_key = gr.Textbox(label="Tavily API Key", type="password", value=config.get('tavily_api_key', ''))
+        gr.Markdown("Tavily搜索工具（如果默认 API 失效，请前往<a href='https://app.tavily.com/' target='_blank'>Tavily官网</a> 获取新 API Key，API 不会上传）")
+        tavily_api_key = gr.Textbox(label="Tavily API Key", value=config.get('tavily_api_key', ''))
         # YouCam 工具
         gr.Markdown("YouCam 肤质分析工具（<a href='https://yce.perfectcorp.com/account/apikey' target='_blank'>YouCam官网</a> 获取 API Key 和 Secret Key）")
         with gr.Row():
             use_youcam = gr.Checkbox(label="使用 YouCam 做肤质分析（否则直接用大模型分析）", value=config.get('use_youcam', False))
-            youcam_api_key = gr.Textbox(label="YouCam API Key", type="password", value=config.get('youcam_api_key', ''))
-            youcam_secret_key = gr.Textbox(label="YouCam Secret Key", type="password", value=config.get('youcam_secret_key', ''))
+            youcam_api_key = gr.Textbox(label="YouCam API Key", value=config.get('youcam_api_key', ''))
+            youcam_secret_key = gr.Textbox(label="YouCam Secret Key", value=config.get('youcam_secret_key', ''))
 
         save_btn = gr.Button("保存", elem_id="config-save-btn")
 
@@ -46,6 +46,12 @@ def render_config_tab(app_state):
             inputs=[chat_api_key, chat_api_base, chat_model_name, chat_style, tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key, app_state],
             outputs=[app_state]
         )
+
+    # 返回所有配置控件对象
+    return [
+        chat_api_key, chat_api_base, chat_model_name, chat_style,
+        tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key
+    ]
 
 
         

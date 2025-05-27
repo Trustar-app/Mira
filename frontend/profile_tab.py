@@ -89,3 +89,11 @@ def render_profile_tab(app_state):
                     makeup_skill_level, skincare_skill_level, user_preferences, app_state],
             outputs=[app_state]
         )
+
+        # 返回所有控件对象
+    return [
+        name, gender, age, face_shape, eyes, nose, mouth, eyebrows,
+        skin_color, skin_type, spot, wrinkle, pore, redness, oiliness,
+        acne, dark_circle, eye_bag, tear_trough, firmness,
+        makeup_skill_level, skincare_skill_level, user_preferences
+    ]
