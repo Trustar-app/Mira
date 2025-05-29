@@ -4,9 +4,18 @@ from tools.character_generation_tools import generate_character_setting
 def render_config_tab(app_state):
     config = app_state.value['config'] if hasattr(app_state, 'value') else app_state['config']
     with gr.Column():
+        with gr.Accordion("⚙️ 这里可以自定义 Mira 的设置：", open=False):
+            gr.Markdown("""
+            * 如果 API 异常可以更换密钥
+            * 可以调整 Mira 的性格和说话风格
+            * 开启或关闭额外的分析功能
+                        
+            💡 修改后记得点击"保存"并重新开始对话哦~
+            """, elem_classes="compact-markdown")
+        
         # 模型设置
         gr.Markdown("### 🤖 模型设置")
-        gr.Markdown("[如果默认 API 失效，请前往<a href='https://bailian.console.aliyun.com/' target='_blank'>阿里百炼</a> 获取新 API Key，API不会上传]")
+        gr.Markdown("[如果默认 API 失效，请前往<a href='https://bailian.console.aliyun.com/' target='_blank'>阿里百炼</a> 获取新 API Key，API不会上传]", elem_classes="compact-markdown")
         with gr.Row():
             chat_api_key = gr.Textbox(label="聊天模型的 API Key",value=config.get('chat_api_key', ''))
             chat_api_base = gr.Textbox(label="聊天模型的 Base URL", value=config.get('chat_api_base', ''))
@@ -18,7 +27,12 @@ def render_config_tab(app_state):
         gr.Markdown("### 👤 角色设定")
         with gr.Row():
             chat_style = gr.Textbox(label="聊天风格描述", value="", lines=1)
-            generate_btn = gr.Button("生成角色设定", variant="primary")
+            with gr.Column():
+                generate_btn = gr.Button("生成角色", variant="primary")
+                gr.Markdown("""
+                ✨ 描述你期望的聊天风格，点击生成角色即可
+                * 建议生成后重新开始对话
+                """, elem_classes="compact-markdown")
         with gr.Row():
             character_name = gr.Textbox(
                 label="角色名称",
@@ -109,7 +123,7 @@ def render_config_tab(app_state):
             state['config']['use_youcam'] = use_youcam
             state['config']['youcam_api_key'] = youcam_api_key
             state['config']['youcam_secret_key'] = youcam_secret_key
-            return state
+            return state, gr.Info('配置已保存！')
 
         # 生成角色设定按钮事件
         generate_btn.click(
@@ -130,7 +144,7 @@ def render_config_tab(app_state):
                 tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key,
                 app_state
             ],
-            outputs=[app_state]
+            outputs=[app_state, gr.Markdown(visible=False)]
         )
 
     # 返回所有配置控件对象

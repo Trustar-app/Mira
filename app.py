@@ -54,7 +54,6 @@ def combine_msg(chat, msg):
     return chat
 
 
-
 def extract_profile_values(profile):
     return [
         profile.get('name', ''),
@@ -162,50 +161,8 @@ def process_user_input(video, text, chat, state):
         else:
             yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
-def build_demo():
-    with gr.Blocks(theme=gr.themes.Soft(), css=custom_css) as demo:
-        gr.Markdown("<div class='title'>🎀 Mira 智能化妆镜</div><div class='subtitle'>AI赋能你的美丽日常</div>", elem_id="main-title")
-        app_state = gr.State(default_app_state())
-        with gr.Tab("💬 聊天"):
-            with gr.Row():
-                with gr.Column(scale=1):
-                    gr.Markdown("#### 📥 用户输入区")
-                    video_in = gr.Video(sources=["webcam"], include_audio=True, label="录制视频（含音频）")
-                    text_in = gr.Textbox(label="文本输入", lines=2, placeholder="请输入你的问题或需求…")
-                    submit_btn = gr.Button("提交", elem_id="submit-btn")
-                    new_chat_btn = gr.Button("新建对话", elem_id="new-chat-btn")
-                with gr.Column(scale=3):
-                    with gr.Row():
-                        with gr.Column(scale=2):
-                            gr.Markdown("#### 🤖 AI对话区")
-                            greeting_prompt = generate_greeting_prompt(app_state.value)
-                            app_state.value['config']['greeting_prompt'] = greeting_prompt
-                            # greeting_response = multimodal_chat_agent([], fill_config_with_env(app_state.value['config']))
-                            greeting_response = mira_graph.invoke({"messages": format_messages(None, greeting_prompt)}, {"configurable": fill_config_with_env(app_state.value['config'])}, stream_mode=["custom"])
-                            response = ""
-                            for mode, chunk in greeting_response:
-                                if mode == "custom" and chunk['type'] == "final":
-                                    response = chunk['content']['response']
-                            chat_out = gr.Chatbot(label="AI对话", value=[{"role": "assistant", "content": response, "type": "final"}], elem_id="chat-out", type="messages")
-                                
-                        with gr.Column(scale=1):
-                            gr.Markdown("#### 🧾 结构化反馈区")
-                            markdown_out = gr.Markdown(label="结构化分析结果", elem_id="feedback-md")
-                # 下面收集所有 tab 的控件
-        with gr.Tab("👤 用户档案"):
-            profile_widgets = render_profile_tab(app_state)
-        with gr.Tab("💄 产品卡片集"):
-            products_widgets = render_products_tab(app_state)
-        with gr.Tab("🎛 配置"):
-            config_widgets = render_config_tab(app_state)
 
-
-        submit_btn.click(
-            process_user_input,
-            inputs=[video_in, text_in, chat_out, app_state],
-            outputs=[chat_out, markdown_out, app_state, video_in, text_in] + profile_widgets + products_widgets + config_widgets
-        )
-        def new_chat(state):
+def new_chat(state):
             state['config']['thread_id'] = str(uuid.uuid4())
             state['resume'] = False
             greeting_prompt = generate_greeting_prompt(state)
@@ -225,6 +182,71 @@ def build_demo():
                 elif mode == "custom" and chunk['type'] == "final":
                     response = chunk['content']['response']
                     yield combine_msg(chat, {"content": response, "type": "final"}), "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+
+def build_demo():
+    with gr.Blocks(theme=gr.themes.Soft(), css=custom_css) as demo:
+        gr.Markdown("<div class='title'>🎀 Mira 智能化妆镜</div><div class='subtitle'>AI赋能你的美丽日常</div>", elem_id="main-title")
+        with gr.Accordion("👋 欢迎来到 Mira！我是一面智能镜子，也是你的私人美妆助理和美丽顾问。", open=False):
+            gr.Markdown("""
+            我可以：
+            * 🔍 帮你了解各种美妆产品
+            * 💄 做你的美貌分析专家
+            * 👩‍🏫 像美妆博主一样教你化妆
+            
+            这个demo旨在模拟你与智能镜子的互动体验~
+            """, elem_classes="compact-markdown")
+        app_state = gr.State(default_app_state())
+        with gr.Tab("💬 聊天"):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("#### 📥 用户输入区")
+                    with gr.Accordion("💡 与 Mira 对话就像和朋友视频聊天一样：", open=False):
+                        gr.Markdown("""
+                        * 可以通过视频录制来展示和询问
+                        * 也可以直接输入文字交流
+                        """, elem_classes="compact-markdown")
+                    video_in = gr.Video(sources=["webcam"], include_audio=True, label="视频对话（含音频）")
+                    text_in = gr.Textbox(label="文字对话", lines=2, placeholder="请输入你的问题或需求…")
+                    submit_btn = gr.Button("提交", elem_id="submit-btn")
+                    new_chat_btn = gr.Button("新建对话", elem_id="new-chat-btn")
+                with gr.Column(scale=2):
+                    gr.Markdown("#### 🤖 AI对话区")
+                    with gr.Accordion("💡 这里会显示 Mira 的回应，就像你在镜子前听到的对话一样：", open=False):
+                        gr.Markdown("""
+                        Mira 会：
+                        * 🎯 理解你的需求
+                        * 💝 给出个性化建议
+                        * 📝 记录重要信息
+                        """, elem_classes="compact-markdown")
+                    greeting_prompt = generate_greeting_prompt(app_state.value)
+                    app_state.value['config']['greeting_prompt'] = greeting_prompt
+                    greeting_response = mira_graph.invoke({"messages": format_messages(None, greeting_prompt)}, {"configurable": fill_config_with_env(app_state.value['config'])}, stream_mode=["custom"])
+                    response = ""
+                    for mode, chunk in greeting_response:
+                        if mode == "custom" and chunk['type'] == "final":
+                            response = chunk['content']['response']
+                    chat_out = gr.Chatbot(label="AI对话", value=[{"role": "assistant", "content": response, "type": "final"}], elem_id="chat-out", type="messages")
+                with gr.Column(scale=1):
+                    gr.Markdown("#### 🔍 分析结果")
+                    with gr.Accordion("💡 这里会显示更详细的分析结果：", open=False):
+                        gr.Markdown("""
+                        * 🔬 皮肤检测结果
+                        * 🔎 产品分析结果
+                        """, elem_classes="compact-markdown")
+                    markdown_out = gr.Markdown(label="分析结果", elem_id="feedback-md")
+        with gr.Tab("👤 个人档案"):
+            profile_widgets = render_profile_tab(app_state)
+        with gr.Tab("💄 产品卡片集"):
+            products_widgets = render_products_tab(app_state)
+        with gr.Tab("🎛 配置"):
+            config_widgets = render_config_tab(app_state)
+
+
+        submit_btn.click(
+            process_user_input,
+            inputs=[video_in, text_in, chat_out, app_state],
+            outputs=[chat_out, markdown_out, app_state, video_in, text_in] + profile_widgets + products_widgets + config_widgets
+        )
 
         new_chat_btn.click(
             new_chat,

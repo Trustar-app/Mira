@@ -1,7 +1,46 @@
 custom_css = '''
-.gradio-container {background: #f8f9fa;}
 .title {font-size:2.2em;font-weight:bold;color:#d63384;margin-bottom:0.2em;}
 .subtitle{color:#868e96;}
+
+/* 调整组件间距 */
+.gradio-container .prose {
+    margin-bottom: 0.3em;
+    margin-top: 0.3em;
+}
+
+.gradio-container .prose h3,
+.gradio-container .prose h4 {
+    margin-top: 0.8em;
+    margin-bottom: 0.3em;
+}
+
+/* 说明文字样式 */
+.gradio-container .markdown-style {
+    margin: 0.3em 0;
+}
+
+.gradio-container .compact-markdown {
+    margin: 0.2em 0;
+}
+
+.gradio-container .compact-markdown p {
+    margin: 0.2em 0;
+}
+
+.gradio-container .compact-markdown ul {
+    margin: 0.2em 0;
+    padding-left: 1.5em;
+}
+
+.gradio-container .compact-markdown li {
+    margin: 0.1em 0;
+}
+
+/* 调整表单组件间距 */
+.gradio-container .form {
+    gap: 0.5em;
+}
+
 #feedback-md {
     height: 400px;
     max-height: 400px;

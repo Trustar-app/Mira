@@ -56,7 +56,7 @@ def delete_product(idx, state):
     state['products'] = products
     # 更新下拉选项
     choices = [(p['name'], i) for i, p in enumerate(products)]
-    return state, render_products_collection(products), gr.update(choices=choices, value=None)
+    return state, render_products_collection(products), gr.update(choices=choices, value=None), gr.Info('产品已删除！')
 
 # 添加产品回调
 def add_product(image, name, category, brand, ingredients, effects, description, state):
@@ -79,12 +79,19 @@ def add_product(image, name, category, brand, ingredients, effects, description,
     state['products'] = products
     # 更新下拉选项
     choices = [(p['name'], i) for i, p in enumerate(products)]
-    # 清空输入
-    return (state, render_products_collection(products), None, "", "", "", "", "", "", gr.update(choices=choices, value=None))
+    # 清空输入并返回提示
+    return (state, render_products_collection(products), None, "", "", "", "", "", "", gr.update(choices=choices, value=None), gr.Info('产品已添加！'))
 
 def render_products_tab(app_state):
     products = app_state.value['products'] if hasattr(app_state, 'value') else app_state['products']
     with gr.Column():
+        with gr.Accordion("💄 这里收藏了你的美妆产品：", open=False):
+            gr.Markdown("""
+            * 在聊天时询问或请求推荐产品，Mira 会询问是否添加为产品卡片
+            * 也可以在这里手动管理产品
+                        
+            💡 Mira 会根据你的产品给出更好的建议哦~
+            """, elem_classes="compact-markdown")
         gr.Markdown("#### 💄 产品卡片集")
         products_html = gr.HTML(value=render_products_collection(products), elem_id="products-html")
         
@@ -109,13 +116,13 @@ def render_products_tab(app_state):
             del_choices = [(p['name'], i) for i, p in enumerate(products)]
             del_idx = gr.Dropdown(choices=del_choices, label="选择要删除的产品", value=None)
             del_btn = gr.Button("删除所选产品")
-        # 删除按钮绑定x
-        del_btn.click(delete_product, inputs=[del_idx, app_state], outputs=[app_state, products_html, del_idx])
+        # 删除按钮绑定
+        del_btn.click(delete_product, inputs=[del_idx, app_state], outputs=[app_state, products_html, del_idx, gr.Markdown(visible=False)])
         # 添加按钮绑定
         add_btn.click(
             add_product,
             inputs=[image, name, category, brand, ingredients, effects, description, app_state],
-            outputs=[app_state, products_html, image, name, category, brand, ingredients, effects, description, del_idx]
+            outputs=[app_state, products_html, image, name, category, brand, ingredients, effects, description, del_idx, gr.Markdown(visible=False)]
         )
     # 返回产品 HTML 控件对象和 Dropdown 控件对象
     return [products_html, del_idx]
