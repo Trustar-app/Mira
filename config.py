@@ -80,6 +80,18 @@ LOGGERS = {
         "clear_log": True,  # 启动时清空日志文件
         "propagate": False        # 是否传播到父级日志器
     },
+
+    # tts 日志
+    "tts": {
+        "level": "DEBUG",         
+        "console": True,
+        "file": True,
+        "file_path": "logs/tts.log",
+        "format": "[%(asctime)s][%(name)s][%(funcName)s %(lineno)d] %(message)s",  # 日志格式
+        "clear_log": True,  # 启动时清空日志文件
+        "propagate": False        # 是否传播到父级日志器
+    },
+
     # 其他模块日志配置
     
 }

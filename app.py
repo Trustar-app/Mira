@@ -14,6 +14,7 @@ from frontend.products_tab import render_products_tab
 from frontend.custom_css import custom_css
 from dotenv import load_dotenv
 from config import MIRA_GREETING_PROMPT
+from utils.tts import text_to_speech, init_audio_cache
 
 load_dotenv()
 
@@ -112,12 +113,12 @@ def process_user_input(video, text, chat, state):
         chat.append({"role": "user", "content": text, "type": "final"})
     if video:
         chat.append({"role": "user", "content": gr.Video(video), "type": "final"})
-    yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+    yield chat, "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
     if video:
         progress_message = "正在处理视频输入..."
         chat = combine_msg(chat, {"content": progress_message, "type": "progress"})
-        yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+        yield chat, "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
         text += "\n<视频中说话内容>\n" + video_to_text(video) + "\n</视频中说话内容>"
     if state.get('resume'):
         inputs = Command(
@@ -142,24 +143,31 @@ def process_user_input(video, text, chat, state):
             content = step.get("__interrupt__")[0].value.get("content")
             chat = combine_msg(chat, {"content": content, "type": "final"})
             state['resume'] = True
-            yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+            yield chat, "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
             break
         msg_type = step.get("type")
         content = step.get("content")
         MiraLog("app", f"msg_type: {msg_type}")
         if msg_type == "progress":
             chat = combine_msg(chat, {"content": content, "type": "progress"})
-            yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+            yield chat, "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
         elif msg_type == "final":
             markdown = dict_to_markdown(content['markdown']) if content.get('markdown') else ""
             state['profile'].update(content['profile']) if content.get('profile') else None
             state['products'].append(content['product']) if content.get('product') else None
-            chat = combine_msg(chat, {"content": content["response"], "type": "final"}) if content.get("response") else chat
-            yield chat, markdown, state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+            response = content.get("response", "")
+            chat = combine_msg(chat, {"content": response, "type": "final"}) if response else chat
+            
+            # 对 final 消息进行 TTS 处理
+            audio_path = None
+            if response:
+                audio_path = text_to_speech(response, voice="Cherry", save_dir="audio_cache")
+            
+            yield chat, markdown, state, None, "", audio_path, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
         else:
-            yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+            yield chat, "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
 
 def new_chat(state):
@@ -178,10 +186,13 @@ def new_chat(state):
                         continue
                     else:
                         response = chunk['content']
-                    yield combine_msg(chat, {"content": response, "type": "progress"}), "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+                    yield combine_msg(chat, {"content": response, "type": "progress"}), "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
                 elif mode == "custom" and chunk['type'] == "final":
                     response = chunk['content']['response']
-                    yield combine_msg(chat, {"content": response, "type": "final"}), "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+                    chat = combine_msg(chat, {"content": response, "type": "final"})
+                    # 对欢迎语进行 TTS 处理
+                    audio_path = text_to_speech(response, voice="Cherry", save_dir="audio_cache") if response else None
+                    yield chat, "", state, None, "", audio_path, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
 def build_demo():
     with gr.Blocks(theme=gr.themes.Soft(), css=custom_css) as demo:
@@ -226,6 +237,7 @@ def build_demo():
                         if mode == "custom" and chunk['type'] == "final":
                             response = chunk['content']['response']
                     chat_out = gr.Chatbot(label="AI对话", value=[{"role": "assistant", "content": response, "type": "final"}], elem_id="chat-out", type="messages")
+                    audio_out = gr.Audio(label="AI语音", elem_id="audio-out", autoplay=True)
                 with gr.Column(scale=1):
                     gr.Markdown("#### 🔍 分析结果")
                     with gr.Accordion("💡 这里会显示更详细的分析结果：", open=False):
@@ -245,16 +257,18 @@ def build_demo():
         submit_btn.click(
             process_user_input,
             inputs=[video_in, text_in, chat_out, app_state],
-            outputs=[chat_out, markdown_out, app_state, video_in, text_in] + profile_widgets + products_widgets + config_widgets
+            outputs=[chat_out, markdown_out, app_state, video_in, text_in, audio_out] + profile_widgets + products_widgets + config_widgets
         )
 
         new_chat_btn.click(
             new_chat,
             inputs=[app_state],
-            outputs=[chat_out, markdown_out, app_state, video_in, text_in] + profile_widgets + products_widgets + config_widgets
+            outputs=[chat_out, markdown_out, app_state, video_in, text_in, audio_out] + profile_widgets + products_widgets + config_widgets
         )
     return demo
 
 demo = build_demo()
+# 初始化音频缓存
+init_audio_cache()
 demo.queue()
 demo.launch(show_error=True, max_threads=10)
