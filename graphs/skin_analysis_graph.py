@@ -9,7 +9,7 @@ from state import SkinAnalysisState, ConfigState
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from utils.loggers import MiraLog
-from tools.skin_analysis_tools import extract_best_face_frame, skin_analysis, skin_feedback, skin_analysis_by_QwenYi
+from tools.skin_analysis_tools import extract_best_face_frame, skin_analysis, skin_feedback, skin_analysis_by_QwenYi, get_image_base64
 from langchain_core.runnables import RunnableConfig
 
 # 1. 输入采集节点
@@ -38,7 +38,7 @@ def wait_for_video_node(state: SkinAnalysisState):
         except Exception as e:
             MiraLog("skin_analysis", f"视频转换为base64失败: {e}", "ERROR")
     else:
-        video_url = state["messages"][-1].content[0]["video_url"]
+        video_url = state["messages"][-1].content[0]["video_url"]["url"]
         state["current_video_base64"] = video_url
     return state
 
@@ -55,8 +55,8 @@ def video_analysis_node(state: SkinAnalysisState):
 
     while True:
         writer({"type": "progress", "content": "正在提取最佳人脸图片..."})
-        best_face_image = extract_best_face_frame(state["current_video_base64"])
-        if not best_face_image:
+        best_face_path = extract_best_face_frame(state["current_video_base64"])
+        if not best_face_path:
             while True:
                 response = interrupt({"type": "interrupt", "content": "未检测到人脸，请重新输入视频。"})
                 video = response.get("video")
@@ -73,19 +73,14 @@ def video_analysis_node(state: SkinAnalysisState):
         else:
             break
 
-    state["best_face_image"] = best_face_image
+    state["best_face_path"] = best_face_path
     state["face_detected"] = True
     
-    try:
-        save_path = Path(__file__).parent.parent / "runtime_data" / "skin_analysis" / "best_face_frame.jpg"
-        if not save_path.parent.exists():
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(save_path, "wb") as f:
-            f.write(base64.b64decode(best_face_image))
-        MiraLog("skin_analysis", f"保存最佳人脸图片成功，路径: {save_path}")
-    except Exception as e:
-        MiraLog("skin_analysis", f"保存最佳人脸图片失败: {e}")
-
+    # 转换为base64用于前端展示
+    best_face_base64 = get_image_base64(best_face_path)
+    if best_face_base64:
+        state["best_face_image"] = best_face_base64
+    
     return state
 
 # 3. 肤质AI检测节点
@@ -98,15 +93,16 @@ def node_skin_analysis(state: SkinAnalysisState, config: RunnableConfig):
     # 调用肤质分析模型，更新 skin_analysis_result/analysis_report
     MiraLog("skin_analysis", "进入肤质AI检测节点")
     writer = get_stream_writer()
-    image_base64 = state["best_face_image"]
+    best_face_path = state["best_face_path"]
 
     writer({"type": "progress", "content": "正在进行肤质AI检测..."})
     if config["configurable"].get("use_youcam"):
-        skin_analysis_result = skin_analysis(image_base64, config)
+        skin_analysis_result = skin_analysis(best_face_path, config)
     else:
-        skin_analysis_result = skin_analysis_by_QwenYi(image_base64, config)
+        skin_analysis_result = skin_analysis_by_QwenYi(best_face_path, config)
     state["user_profile"]["skin_quality"] = skin_analysis_result.get("skin_quality")
     state["skin_analysis_result"] = skin_analysis_result
+   
     return state
 
 # 4. 结果反馈节点
@@ -127,7 +123,19 @@ def node_result_feedback(state: SkinAnalysisState, config: RunnableConfig):
         analysis_report += chunk
         writer({"type": "progress", "content": analysis_report})
     state["analysis_report"] = analysis_report
-    writer({"type": "final", "content": {"response": analysis_report, "markdown": state["skin_analysis_result"], "profile": state["user_profile"]}})
+    
+    # 清理临时文件
+    if state.get("best_face_path") and os.path.exists(state["best_face_path"]):
+        try:
+            os.unlink(state["best_face_path"])
+        except:
+            pass
+    
+    writer({"type": "final", "content": {
+        "response": analysis_report, 
+        "markdown": {**state["skin_analysis_result"], "image": state.get("best_face_image")}, 
+        "profile": state["user_profile"],
+    }})
     return state
 
 def build_skincare_graph():

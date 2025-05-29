@@ -199,9 +199,10 @@ class SkinAnalysisState(TypedDict, total=False):
 
     # 中间产物
     current_video_base64: Optional[str]
-    best_face_image: Optional[str]   # 最佳脸部图片路径
+    best_face_image: Optional[str]   # 最佳脸部图片base64编码
+    best_face_path: Optional[str]   # 最佳脸部图片临时文件路径
     face_detected: Optional[bool]    # 是否检测到人脸
-    skin_analysis_result: Optional[str]   # JSON字符串形式的肤质分析结果
+    skin_analysis_result: Optional[Dict[str, Any]]   # JSON字符串形式的肤质分析结果
     analysis_report: Optional[str]        # AI生成的个性化解读
 
 

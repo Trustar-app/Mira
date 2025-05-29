@@ -181,22 +181,6 @@ def tool_post_node(state: ProductAnalysisState):
     if tool_name == "tavily_search":
         import json
         content = json.loads(last_msg.content)
-        # content 结构：
-        # {
-        #     "query": "...",  # 查询词
-        #     "results": [
-        #         {
-        #             "title": "...",
-        #             "url": "...",
-        #             "content": "..."  # 太长，使用前面
-        #             "score": "..."  # 不用
-        #             "raw_content": "..."  # 不用
-        #         }
-        #     ],
-        #     "images": [
-        #         "..."  # 图片url
-        #     ]
-        # }
         stream_writer = get_stream_writer()
         stream_writer({"type": "final", "content": {"markdown": content}})
 
