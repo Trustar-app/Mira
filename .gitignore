@@ -2,3 +2,5 @@
 .vscode/launch.json
 .venv/
 .env
+logs/*
+audio_cache/*.wav
