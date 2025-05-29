@@ -15,12 +15,12 @@ from langchain_core.runnables import RunnableConfig
 def gender_selection_node(state: UserProfileEditState, config: RunnableConfig):
     MiraLog("user_profile_creation", "进入创建用户档案子图")
     MiraLog("user_profile_creation", f"进入节点：性别选择")
-    response = interrupt({"type": "interrupt", "content": "请告诉我你的性别"}).get("text")
+    response = interrupt({"type": "interrupt", "content": "嗨～能告诉我你的性别吗？"}).get("text")
     # 更新 State
     return {
         "user_profile": {"gender": response}, 
         "messages": [
-            AIMessage(content="请告诉我你的性别"),
+            AIMessage(content="嗨～能告诉我你的性别吗？"),
             HumanMessage(content=response)
         ]
     }
@@ -28,12 +28,12 @@ def gender_selection_node(state: UserProfileEditState, config: RunnableConfig):
 # 2. 年龄输入节点
 def age_input_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", f"进入节点：年龄输入")
-    response = interrupt({"type": "interrupt", "content": "请告诉我你的年龄"}).get("text")
+    response = interrupt({"type": "interrupt", "content": "你今年多大啦？"}).get("text")
     # 更新 State
     return {
         "user_profile": {"age": response}, 
         "messages": [
-            AIMessage(content="请告诉我你的年龄"),
+            AIMessage(content="你今年多大啦？"),
             HumanMessage(content=response)
         ]
     }
@@ -43,14 +43,14 @@ def face_feature_analysis_node(state: UserProfileEditState, config: RunnableConf
     writer = get_stream_writer()
     MiraLog("user_profile_creation", f"进入节点：面部特征采集与分析")
     while True:
-        response = interrupt({"type": "interrupt", "content": "请上传面部视频以采集五官特征、肤色、肤质"})
+        response = interrupt({"type": "interrupt", "content": "亲，能拍一段小视频让我看看你的脸吗？这样我才能更好地了解你的五官特征、肤色和肤质哦～"})
         if "video" in response:
             break
         else:
-            response = interrupt({"type": "interrupt", "content": "请上传面部视频以采集五官特征、肤色、肤质"})
+            response = interrupt({"type": "interrupt", "content": "亲，能拍一段小视频让我看看你的脸吗？这样我才能更好地了解你的五官特征、肤色和肤质哦～"})
     video_path = response.get("video")
     # 工具调用：分析面部特征
-    writer({"type": "progress", "content": "正在分析面部特征..."})
+    writer({"type": "progress", "content": "让我仔细看看你的面部特征..."})
     features = analyze_face_features_with_llm(video_path, config)
     face_features = features.get('face_features', {})
 
@@ -88,11 +88,11 @@ def face_feature_analysis_node(state: UserProfileEditState, config: RunnableConf
 # 4. 化妆专业度打分节点
 def makeup_skill_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", f"进入节点：化妆专业度打分")
-    response = interrupt({"type": "interrupt", "content": "请给你的化妆专业度打分（0-10分）"}).get("text")
+    response = interrupt({"type": "interrupt", "content": "在化妆方面，你觉得自己有多厉害呢？给自己打个分吧（0-10分）～"}).get("text")
     return {
         "user_profile": {"makeup_skill_level": response},
         "messages": [
-            AIMessage(content="请给你的化妆专业度打分（0-10分）"),
+            AIMessage(content="在化妆方面，你觉得自己有多厉害呢？给自己打个分吧（0-10分）～"),
             HumanMessage(content=response)
         ]
     }
@@ -100,11 +100,11 @@ def makeup_skill_node(state: UserProfileEditState):
 # 5. 护肤专业度打分节点
 def skincare_skill_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", f"进入节点：护肤专业度打分")
-    response = interrupt({"type": "interrupt", "content": "请给你的护肤专业度打分（0-10分）"}).get("text")
+    response = interrupt({"type": "interrupt", "content": "那护肤呢？你觉得自己在护肤方面的水平如何（0-10分）？"}).get("text")
     return {
         "user_profile": {"skincare_skill_level": response},
         "messages": [
-            AIMessage(content="请给你的护肤专业度打分（0-10分）"),
+            AIMessage(content="那护肤呢？你觉得自己在护肤方面的水平如何（0-10分）？"),
             HumanMessage(content=response)
         ]
     }
@@ -112,11 +112,11 @@ def skincare_skill_node(state: UserProfileEditState):
 # 6. 个人诉求与偏好收集节点
 def user_preferences_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", f"进入节点：个人诉求与偏好收集")
-    response = interrupt({"type": "interrupt", "content": "请分享你在护肤和化妆中的诉求或偏好"}).get("text")
+    response = interrupt({"type": "interrupt", "content": "说说看，你最希望在护肤和化妆方面达到什么效果呢？有什么特别喜欢或不喜欢的风格吗？"}).get("text")
     return {
         "user_profile": {"user_preferences": response},
         "messages": [
-            AIMessage(content="请分享你在护肤和化妆中的诉求或偏好"),
+            AIMessage(content="说说看，你最希望在护肤和化妆方面达到什么效果呢？有什么特别喜欢或不喜欢的风格吗？"),
             HumanMessage(content=response)
         ]
     }
@@ -124,11 +124,11 @@ def user_preferences_node(state: UserProfileEditState):
 # 7. 用户名采集节点
 def name_input_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", f"进入节点：用户名采集")
-    response = interrupt({"type": "interrupt", "content": "请告诉我你的名字"}).get("text")
+    response = interrupt({"type": "interrupt", "content": "最后一个问题啦～我该怎么称呼你呢？"}).get("text")
     return {
         "user_profile": {"name": response},
         "messages": [
-            AIMessage(content="请告诉我你的名字"),
+            AIMessage(content="最后一个问题啦～我该怎么称呼你呢？"),
             HumanMessage(content=response)
         ]
     }
