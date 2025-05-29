@@ -228,7 +228,7 @@ def format_user_info(user_profile: Union[UserProfile, Dict[str, Any]], products_
     
     # 处理产品目录
     if products_directory:
-        markdown += "\n【产品目录】\n"
+        markdown += "\n【用户产品目录】\n"
         for product in products_directory:
             product_info = {k: v for k, v in product.items() if v and k != "image_url"}  # 移除空值和图片URL
             if product_info:

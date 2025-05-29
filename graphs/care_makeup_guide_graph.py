@@ -8,10 +8,9 @@ from langgraph.types import interrupt
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import InjectedState, ToolNode
 from typing import Annotated
-from langgraph.types import Command
 from pydantic import BaseModel, Field
 from tools.common.formatters import format_user_info
 
@@ -25,7 +24,7 @@ def generate_plan(state: Annotated[dict, InjectedState], config: RunnableConfig)
     
     system_prompt = (
         "你是一位专业的护肤与化妆计划生成助手。\n\n"
-        "请根据用户信息、产品收藏夹和用户历史对话，生成一份个性化的护肤或化妆方案。\n"
+        "请根据用户信息、用户产品收藏夹和用户历史对话，生成一份个性化的护肤或化妆方案。\n"
         "返回的计划应包含以下字段，并以 **JSON 格式** 输出：\n"
         "{{\n"
         '  "type": "护肤" 或 "化妆",\n'
@@ -54,6 +53,8 @@ def generate_plan(state: Annotated[dict, InjectedState], config: RunnableConfig)
     msg = "完成计划生成，请向用户简要说明当前计划内容，并请求确认" if not state.get("plan") else "生成新计划，请向用户简要说明计划内容，并请求确认"
     response = llm.invoke([SystemMessage(content=system_prompt)] + state.get("messages", []))
     
+    writer = get_stream_writer()
+    writer({"type": "final", "content": {"markdown": response}})
     return msg, {"plan": response}
 
 class InputCollectionInput(BaseModel):
@@ -116,7 +117,7 @@ def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
         plan=state.get("plan", "无")
     )
     messages = [SystemMessage(content=system_prompt), *state.get("messages", [])]
-    stream_writer({"type": "progress", "content": "正在分析用户输入..."})
+    stream_writer({"type": "progress", "content": "正在分析..."})
     content_buffer = ""
     first_chunk = True
     llm = ChatOpenAI(

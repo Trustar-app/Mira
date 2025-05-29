@@ -53,7 +53,6 @@ def combine_msg(chat, msg):
         chat.append({"role": "assistant", "content": msg["content"], "type": msg["type"]})
     return chat
 
-
 def extract_profile_values(profile):
     return [
         profile.get('name', ''),
@@ -232,6 +231,7 @@ def build_demo():
                         gr.Markdown("""
                         * 🔬 皮肤检测结果
                         * 🔎 产品分析结果
+                        * 💄 化妆或护肤指导计划
                         """, elem_classes="compact-markdown")
                     markdown_out = gr.Markdown(label="分析结果", elem_id="feedback-md")
         with gr.Tab("👤 个人档案"):

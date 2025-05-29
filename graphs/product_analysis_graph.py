@@ -14,7 +14,6 @@ from tools.product_analysis_tools import extract_structured_info_from_search
 from tools.common.formatters import format_user_info
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
-from typing import Annotated
 from langchain_core.runnables import RunnableConfig
 
 class InputCollectionInput(BaseModel):
@@ -97,12 +96,22 @@ def chatbot(state: ProductAnalysisState, config: RunnableConfig):
         f"专业领域：{character_setting['expertise']}\n"
         f"互动风格：{character_setting['interaction_style']}\n\n"
         "【任务说明】\n"
-        "你现在是一位私人产品适配度分析专家，你的任务是基于用户提到的产品，完成如下步骤：\n"
-        "1. 如果用户没有提供产品信息，请调用 query_user_input 工具，采集用户输入的产品名称或描述。\n"
-        "2. 获取用户输入后，调用 tavily_search 工具，检索产品的图片、名称、分类、品牌、成分、功效等信息。\n"
-        "3. 在检索到足够的产品信息后，作为语音助手，用温柔的语气向用户简要讲述该产品与用户的适配度分析。\n"
-        "4. 分析完成后，调用 add_product_to_directory 工具，询问用户是否将该产品加入个人产品目录。\n"
-        "5. 无论用户是否加入，完成后直接结束对话。\n\n"
+        "你现在是一位全能的产品分析专家，需要根据用户的不同需求提供相应的分析和建议：\n\n"
+        "1. 产品推荐场景\n"
+        "- 理解用户的具体需求（如肤质、使用场景等）\n"
+        "- 基于需求推荐合适的产品，并解释推荐理由\n\n"
+        "2. 产品识别场景\n"
+        "- 识别用户提到的产品信息\n"
+        "- 提供产品的基本信息（品牌、功效、特点等）\n\n"
+        "3. 成分分析场景\n"
+        "- 分析产品成分表\n"
+        "- 评估产品是否适合用户\n"
+        "- 提醒潜在的使用注意事项\n\n"
+        "【执行步骤】\n"
+        "1. 如果用户没有提供足够信息，调用 query_user_input 工具收集必要信息\n"
+        "2. 使用 tavily_search 工具检索产品相关信息\n"
+        "3. 根据场景提供相应的分析和建议\n"
+        "4. 询问是否将产品加入个人产品目录\n\n"
         "【回复要求】\n"
         "1. 所有回复必须简短、口语化，适合语音播报\n"
         "2. 不要使用分点列举的形式回答\n"
@@ -168,6 +177,30 @@ def tool_post_condition(state: ProductAnalysisState):
         tool_name = last_msg.name
     elif isinstance(last_msg, dict) and "name" in last_msg:
         tool_name = last_msg["name"]
+
+    # 调用 tavily_search 工具后，展示检索结果
+    if tool_name == "tavily_search":
+        import json
+        content = json.loads(last_msg.content)
+        # content 结构：
+        # {
+        #     "query": "...",  # 查询词
+        #     "results": [
+        #         {
+        #             "title": "...",
+        #             "url": "...",
+        #             "content": "..."  # 太长，使用前面
+        #             "score": "..."  # 不用
+        #             "raw_content": "..."  # 不用
+        #         }
+        #     ],
+        #     "images": [
+        #         "..."  # 图片url
+        #     ]
+        # }
+        stream_writer = get_stream_writer()
+        stream_writer({"type": "final", "content": {"markdown": content}})
+
     if hasattr(last_msg, "content"):
         tool_content = last_msg.content
     elif isinstance(last_msg, dict) and "content" in last_msg:
