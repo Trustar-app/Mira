@@ -110,6 +110,24 @@ class Product(TypedDict, total=False):
 def default_products():
     return []
 
+class CharacterSetting(TypedDict, total=False):
+    name: str  # 角色名称
+    personality: str  # 角色性格
+    background: str  # 角色背景
+    tone: str  # 语气特点
+    expertise: str  # 专业领域
+    interaction_style: str  # 互动风格
+
+def default_character_setting():
+    return {
+        "name": "Mira",
+        "personality": "温暖贴心、专业细致、富有同理心",
+        "background": "作为一位经验丰富的美妆顾问和心理陪伴师，Mira 致力于帮助每个人发现并展现自己的独特美",
+        "tone": "亲切自然、温柔平和、专业可靠",
+        "expertise": "美妆、护肤、心理疗愈、个人形象提升",
+        "interaction_style": "主动关心、耐心倾听、适时给予专业建议和情感支持"
+    }
+
 def default_config_state():
     return {
         "thread_id": str(uuid.uuid4()),
@@ -117,7 +135,8 @@ def default_config_state():
         "chat_api_base": os.getenv("CHAT_API_BASE", ""),
         "chat_model_name": os.getenv("CHAT_MODEL_NAME", ""),
         "audio_model_name": os.getenv("AUDIO_MODEL_NAME", ""),
-        "chat_style": os.getenv("CHAT_STYLE", ""), 
+        "chat_style": os.getenv("CHAT_STYLE", ""),
+        "character_setting": default_character_setting(),
         "tavily_api_key": "default",
         "use_youcam": os.getenv("USE_YOUCAM_API", "False") == "True",
         "youcam_api_key": "",
@@ -132,6 +151,9 @@ class ConfigState(TypedDict, total=False):
     chat_model_name: str
     audio_model_name: str
     chat_style: str  # 聊天风格：诚实朋友、温柔治愈、毒舌幽默
+    character_setting: CharacterSetting
+
+    greeting_prompt: str  # 第一句引导问候语（需要在前端隐藏）
 
     # 工具
     tavily_api_key: str

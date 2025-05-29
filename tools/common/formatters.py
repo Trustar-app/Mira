@@ -1,10 +1,11 @@
-from state import MiraState
+from state import MiraState, UserProfile, Product
 import base64
 import mimetypes
 from langchain_core.messages import HumanMessage
 from utils.loggers import MiraLog
 import os
 from PIL import Image
+from typing import Union, List, Dict, Any
 
 def format_messages(video, text):
     """
@@ -170,3 +171,67 @@ def en_to_cn(key):
         "description": "备注",
     }
     return en_to_cn_dict.get(key, key)
+
+def format_user_info(user_profile: Union[UserProfile, Dict[str, Any]], products_directory: List[Product] = None) -> str:
+    """
+    将用户信息和产品目录格式化为易读的markdown格式
+    
+    Args:
+        user_profile: 用户档案信息
+        products_directory: 用户的产品目录
+        
+    Returns:
+        str: 格式化后的markdown文本
+    """
+    markdown = "【用户档案】\n"
+    
+    # 处理用户基本信息
+    basic_info = {
+        "name": user_profile.get("name"),
+        "gender": user_profile.get("gender"),
+        "age": user_profile.get("age")
+    }
+    basic_info = {k: v for k, v in basic_info.items() if v}  # 移除空值
+    if basic_info:
+        markdown += dict_to_markdown(basic_info)
+    
+    # 处理肤质信息
+    skin_info = {
+        "skin_color": user_profile.get("skin_color"),
+        "skin_type": user_profile.get("skin_type")
+    }
+    skin_info = {k: v for k, v in skin_info.items() if v}  # 移除空值
+    if skin_info:
+        markdown += "【肤质信息】\n" + dict_to_markdown(skin_info)
+    
+    # 处理面部特征
+    if face_features := user_profile.get("face_features"):
+        face_features = {k: v for k, v in face_features.items() if v}  # 移除空值
+        if face_features:
+            markdown += "【面部特征】\n" + dict_to_markdown(face_features)
+    
+    # 处理肤质评分
+    if skin_quality := user_profile.get("skin_quality"):
+        skin_quality = {k: v for k, v in skin_quality.items() if v is not None}  # 移除空值
+        if skin_quality:
+            markdown += "【肤质评分】\n" + dict_to_markdown(skin_quality)
+    
+    # 处理技能和偏好
+    skill_info = {
+        "makeup_skill_level": user_profile.get("makeup_skill_level"),
+        "skincare_skill_level": user_profile.get("skincare_skill_level"),
+        "user_preferences": user_profile.get("user_preferences")
+    }
+    skill_info = {k: v for k, v in skill_info.items() if v}  # 移除空值
+    if skill_info:
+        markdown += "【技能和偏好】\n" + dict_to_markdown(skill_info)
+    
+    # 处理产品目录
+    if products_directory:
+        markdown += "\n【产品目录】\n"
+        for product in products_directory:
+            product_info = {k: v for k, v in product.items() if v and k != "image_url"}  # 移除空值和图片URL
+            if product_info:
+                markdown += dict_to_markdown(product_info)
+    
+    return markdown

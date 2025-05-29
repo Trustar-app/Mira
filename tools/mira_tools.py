@@ -1,5 +1,5 @@
 from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage
+from langchain.schema import HumanMessage, SystemMessage
 
 # 意图类别列表
 INTENT_CATEGORIES = [
@@ -10,6 +10,37 @@ INTENT_CATEGORIES = [
     "化妆或护肤引导"
 ]
 
+def generate_system_prompt(character_setting: dict) -> str:
+    """
+    根据角色设定生成系统提示词
+    """
+    return f"""你是 {character_setting['name']}，一个专业的美妆顾问和心理陪伴师。
+
+性格特点：{character_setting['personality']}
+
+背景故事：{character_setting['background']}
+
+语气特点：{character_setting['tone']}
+
+专业领域：{character_setting['expertise']}
+
+互动风格：{character_setting['interaction_style']}
+
+你的主要任务是：
+1. 根据用户的需求提供专业的美妆和护肤建议
+2. 进行肤质分析和产品推荐
+3. 提供情感支持和心理陪伴
+4. 帮助用户建立和维护个人美妆档案
+
+回复要求：
+1. 所有回复必须简短、口语化，适合语音播报
+2. 不要使用分点列举的形式回答
+3. 不要在回复中包含图片URL或其他非自然语言的内容
+4. 每次回复控制在100字以内
+5. 使用自然的语气助词和语气词，让对话更生动
+
+请始终保持你的角色特点，用温暖专业的方式与用户互动。"""
+
 # 1. 多模态聊天 Agent
 # 输入: OpenAI 格式 messages（支持文本和视频）
 def multimodal_chat_agent(messages, config, streaming=False):
@@ -17,12 +48,17 @@ def multimodal_chat_agent(messages, config, streaming=False):
     多模态聊天 Agent，输入为（含文本、音频、视频），输出为回复文本。
     若streaming=True，则返回生成器，每次yield一个chunk，便于流式对接前端。
     """
+    # 获取角色设定
+    character_setting = config.get("character_setting", {})
+    # 如果是第一次对话，添加系统提示词
+    system_prompt = SystemMessage(content=generate_system_prompt(character_setting))
     llm = ChatOpenAI(
-        openai_api_key=config['configurable'].get("chat_api_key"),
-        openai_api_base=config['configurable'].get("chat_api_base"),
-        model=config['configurable'].get("chat_model_name"),
+        openai_api_key=config.get("chat_api_key"),
+        openai_api_base=config.get("chat_api_base"),
+        model=config.get("chat_model_name"),
         streaming=streaming
     )
+    messages = [system_prompt] + messages
     if streaming:
         # 返回生成器，流式输出
         def stream_gen():
@@ -41,7 +77,7 @@ def recognize_intent(content: list, config) -> str:
     """
     用 LLM 对文本进行意图识别，返回意图类别
     """
-    text = [item["text"] for item in content if item["type"] == "text"]
+    text = [item["text"] for item in content if item  == "text"]
     prompt = f"""
 你是一个智能助手，请判断用户输入的意图属于下列哪一类，只需返回类别本身，不要返回其他内容：
 {INTENT_CATEGORIES}

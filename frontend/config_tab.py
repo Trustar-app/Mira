@@ -1,4 +1,5 @@
 import gradio as gr
+from tools.character_generation_tools import generate_character_setting
 
 def render_config_tab(app_state):
     config = app_state.value['config'] if hasattr(app_state, 'value') else app_state['config']
@@ -11,11 +12,47 @@ def render_config_tab(app_state):
             chat_api_base = gr.Textbox(label="聊天模型的 Base URL", value=config.get('chat_api_base', ''))
         with gr.Row():
             chat_model_name = gr.Textbox(label="聊天模型的模型名称", value=config.get('chat_model_name', ''))
-            chat_style = gr.Dropdown(
-                label="聊天风格",
-                choices=["诚实朋友", "温柔治愈", "毒舌幽默"],
-                value=config.get('chat_style', '温柔治愈') or "温柔治愈"
+            voice_model_name = gr.Textbox(label="语音模型的模型名称", value=config.get('voice_model_name', ''))
+        
+        # 角色设定
+        gr.Markdown("### 👤 角色设定")
+        with gr.Row():
+            chat_style = gr.Textbox(label="聊天风格描述", value="", lines=1)
+            generate_btn = gr.Button("生成角色设定", variant="primary")
+        with gr.Row():
+            character_name = gr.Textbox(
+                label="角色名称",
+                value=config.get('character_setting', {}).get('name', 'Mira'),
+                interactive=True
             )
+            character_personality = gr.Textbox(
+                label="性格特点",
+                value=config.get('character_setting', {}).get('personality', ''),
+                lines=2
+            )
+        with gr.Row():
+            character_background = gr.Textbox(
+                label="背景故事",
+                value=config.get('character_setting', {}).get('background', ''),
+                lines=3
+            )
+            character_tone = gr.Textbox(
+                label="语气特点",
+                value=config.get('character_setting', {}).get('tone', ''),
+                lines=2
+            )
+        with gr.Row():
+            character_expertise = gr.Textbox(
+                label="专业领域",
+                value=config.get('character_setting', {}).get('expertise', ''),
+                lines=2
+            )
+            character_interaction = gr.Textbox(
+                label="互动风格",
+                value=config.get('character_setting', {}).get('interaction_style', ''),
+                lines=2
+            )
+
         # 工具设置
         gr.Markdown("### 🛠️ 工具设置")
         # Tavily 搜索工具
@@ -30,26 +67,77 @@ def render_config_tab(app_state):
 
         save_btn = gr.Button("保存", elem_id="config-save-btn")
 
-        def save_config(chat_api_key, chat_api_base, chat_model_name, chat_style, tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key, state):
+        def generate_character(chat_style, state):
+            model_config = {
+                "chat_api_key": state['config']['chat_api_key'],
+                "chat_api_base": state['config']['chat_api_base'],
+                "chat_model_name": state['config']['chat_model_name']
+            }
+            character = generate_character_setting(chat_style, model_config)
+            
+            # 自动保存角色设定
+            state['config']['character_setting'] = character
+            
+            return (
+                character.get('name', ''),
+                character.get('personality', ''),
+                character.get('background', ''),
+                character.get('tone', ''),
+                character.get('expertise', ''),
+                character.get('interaction_style', ''),
+                state,
+                ''
+            )
+
+        def save_config(chat_api_key, chat_api_base, chat_model_name, chat_style, 
+                       character_name, character_personality, character_background,
+                       character_tone, character_expertise, character_interaction,
+                       tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key, state):
             state['config']['chat_api_key'] = chat_api_key
             state['config']['chat_api_base'] = chat_api_base
             state['config']['chat_model_name'] = chat_model_name
             state['config']['chat_style'] = chat_style
+            state['config']['character_setting'] = {
+                'name': character_name,
+                'personality': character_personality,
+                'background': character_background,
+                'tone': character_tone,
+                'expertise': character_expertise,
+                'interaction_style': character_interaction
+            }
             state['config']['tavily_api_key'] = tavily_api_key
             state['config']['use_youcam'] = use_youcam
             state['config']['youcam_api_key'] = youcam_api_key
             state['config']['youcam_secret_key'] = youcam_secret_key
             return state
 
+        # 生成角色设定按钮事件
+        generate_btn.click(
+            generate_character,
+            inputs=[chat_style, app_state],
+            outputs=[character_name, character_personality, character_background,
+                    character_tone, character_expertise, character_interaction,
+                    app_state, chat_style]
+        )
+
+        # 保存配置按钮事件
         save_btn.click(
             save_config,
-            inputs=[chat_api_key, chat_api_base, chat_model_name, chat_style, tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key, app_state],
+            inputs=[
+                chat_api_key, chat_api_base, chat_model_name, voice_model_name,
+                character_name, character_personality, character_background,
+                character_tone, character_expertise, character_interaction,
+                tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key,
+                app_state
+            ],
             outputs=[app_state]
         )
 
     # 返回所有配置控件对象
     return [
-        chat_api_key, chat_api_base, chat_model_name, chat_style,
+        chat_api_key, chat_api_base, chat_model_name, voice_model_name,
+        character_name, character_personality, character_background,
+        character_tone, character_expertise, character_interaction,
         tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key
     ]
 

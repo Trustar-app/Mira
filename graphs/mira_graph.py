@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 from state import MiraState, ConfigState
@@ -21,6 +21,7 @@ intent_to_subgraph = {
     "化妆或护肤引导": "care_makeup_guide_subgraph",
 }
 
+
 # 多模态意图识别与流程调度节点
 def mira(state: MiraState, config: RunnableConfig) -> Command[Literal["user_profile_creation_subgraph",  "skin_analysis_subgraph", "product_analysis_subgraph", "care_makeup_guide_subgraph"]]:
     """
@@ -34,7 +35,8 @@ def mira(state: MiraState, config: RunnableConfig) -> Command[Literal["user_prof
     if intent in intent_to_subgraph:
         return Command(goto=intent_to_subgraph[intent], update={"current_flow": intent})
     else:
-        response = multimodal_chat_agent(state["messages"], config, streaming=True)
+
+        response = multimodal_chat_agent(state["messages"], config['configurable'], streaming=True)
         buffer = ""
         for chunk in response:
             buffer += chunk

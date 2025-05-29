@@ -16,6 +16,7 @@ import tempfile
 import time
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+from tools.common.formatters import format_user_info
 
 def get_access_token(config):
     """
@@ -331,21 +332,46 @@ def skin_feedback(data, config):
     :return: 反馈文本（str）
     """
     MiraLog("skin_analysis", f"[skin_feedback] 生成反馈，输入数据: {data}")
+    
+    # 获取角色设定
+    character_setting = config["configurable"].get("character_setting", {})
+    
+    # 格式化用户信息
+    formatted_info = format_user_info(config.get("user_profile", {}))
+    
     SYSTEM_PROMPT = (
-        "你是用户贴心的人性化健康伴侣Mira。请根据用户的肤质检测结果，生成一段自然、连贯、温暖的中文聊天回复。"
-        "回复内容应尽量涵盖以下四个方面，但不要生硬分条或罗列：\n"
+        f"你是 {character_setting['name']}，一个专业的美妆顾问和心理陪伴师。\n\n"
+        f"【角色设定】\n"
+        f"性格特点：{character_setting['personality']}\n"
+        f"语气特点：{character_setting['tone']}\n"
+        f"专业领域：{character_setting['expertise']}\n"
+        f"互动风格：{character_setting['interaction_style']}\n\n"
+        "【任务说明】\n"
+        "你现在需要根据用户的肤质检测结果，生成一段自然、连贯、温暖的中文语音回复。\n"
+        "回复内容应尽量涵盖以下四个方面：\n"
         "—— 检测完成的温馨提示\n"
         "—— 针对用户肤质的专业分析和建议\n"
         "—— 充满关怀和鼓励的情感反馈\n"
-        "—— 贴心的下一步互动建议\n"
-        "请用亲切、鼓励、自然的语气，将这些内容巧妙融合在一段聊天回复中，让用户感受到陪伴和支持。\n"
-        "用户肤质检测原始数据如下：\n"
-        f"{data}"
+        "—— 贴心的下一步互动建议\n\n"
+        "【回复要求】\n"
+        "1. 所有回复必须简短、口语化，适合语音播报\n"
+        "2. 不要使用分点列举的形式回答\n"
+        "3. 不要在回复中包含图片URL或其他非自然语言的内容\n"
+        "4. 每次回复控制在100字以内\n"
+        "5. 使用自然的语气助词和语气词，让对话更生动\n\n"
+        "【肤质检测原始数据】\n"
+        f"{data}\n\n"
+        f"{formatted_info}"
     )
-    llm = ChatOpenAI(model_name=config['configurable'].get("chat_model_name"), temperature=0, openai_api_key=config['configurable'].get("chat_api_key"), openai_api_base=config['configurable'].get("chat_api_base"))
+    llm = ChatOpenAI(
+        model_name=config['configurable'].get("chat_model_name"), 
+        temperature=0, 
+        openai_api_key=config['configurable'].get("chat_api_key"), 
+        openai_api_base=config['configurable'].get("chat_api_base")
+    )
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content="请生成反馈")
+        HumanMessage(content="我的皮肤检测结果怎么样？")
     ]
     # 返回生成器，流式输出
     def stream_gen():

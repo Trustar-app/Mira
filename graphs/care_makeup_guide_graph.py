@@ -13,12 +13,16 @@ from langgraph.prebuilt import InjectedState, ToolNode
 from typing import Annotated
 from langgraph.types import Command
 from pydantic import BaseModel, Field
+from tools.common.formatters import format_user_info
 
 @tool("generate_plan", return_direct=True, response_format="content_and_artifact")
 def generate_plan(state: Annotated[dict, InjectedState], config: RunnableConfig):
     """
     生成护肤/化妆计划
     """
+    # 格式化用户信息和产品目录
+    formatted_info = format_user_info(state.get("user_profile", {}), state.get("products_directory", []))
+    
     system_prompt = (
         "你是一位专业的护肤与化妆计划生成助手。\n\n"
         "请根据用户信息、产品收藏夹和用户历史对话，生成一份个性化的护肤或化妆方案。\n"
@@ -36,12 +40,9 @@ def generate_plan(state: Annotated[dict, InjectedState], config: RunnableConfig)
         "  ]\n"
         "}}\n"
         "```\n\n"
-        "【用户信息】：{user_profile}\n"
-        "【产品收藏夹】：{products_directory}\n"
+        f"{formatted_info}\n"
         "{plan_section}"
     ).format(
-        user_profile=state.get("user_profile", "无"),
-        products_directory=state.get("products_directory", "无"),
         plan_section=f"【当前计划】：{state['plan']}\n" if state.get("plan") else ""
     )
     llm = ChatOpenAI(
@@ -79,9 +80,19 @@ tool_node = ToolNode(
 # 节点实现
 def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
     stream_writer = get_stream_writer()
+    # 获取角色设定
+    character_setting = config["configurable"].get("character_setting", {})
+    
     # 构建系统 prompt
     system_prompt = (
-        "你是一位专业的护肤与化妆指导助手，负责根据用户的具体需求和个人信息提供个性化方案。\n\n"
+        f"你是 {character_setting['name']}，一个专业的美妆顾问和心理陪伴师。\n\n"
+        f"【角色设定】\n"
+        f"性格特点：{character_setting['personality']}\n"
+        f"语气特点：{character_setting['tone']}\n"
+        f"专业领域：{character_setting['expertise']}\n"
+        f"互动风格：{character_setting['interaction_style']}\n\n"
+        "【任务说明】\n"
+        "你现在负责根据用户的具体需求和个人信息提供个性化的护肤与化妆方案。\n\n"
         "请遵循以下流程完成你的任务：\n"
         "1. 如果用户尚未提出明确需求，请调用 request_user_input 工具引导其简要说明当前需求（如：约会妆容、日常护肤、特殊场合等）。\n"
         "2. 一旦获取到简要的需求，就请调用 generate_plan 工具为其制定一套完整的护肤或化妆方案，不要多轮询问用户需求，请直接生成方案。\n"
@@ -92,7 +103,13 @@ def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
         "   - 每一步都需提示用户上传视频；\n"
         "   - 针对上传内容给予专业反馈，并继续下一步。\n"
         "5. 全部步骤完成后，请对整个体验进行总结，并给予积极鼓励。\n\n"
-        "每次只能调用一个工具。"
+        "【回复要求】\n"
+        "1. 所有回复必须简短、口语化，适合语音播报\n"
+        "2. 不要使用分点列举的形式回答\n"
+        "3. 不要在回复中包含图片URL或其他非自然语言的内容\n"
+        "4. 每次回复控制在100字以内\n"
+        "5. 使用自然的语气助词和语气词，让对话更生动\n\n"
+        "每次只能调用一个工具。\n"
         "以下是当前计划(如果还未生成计划，请忽略)：\n"
         "{plan}\n"
     ).format(

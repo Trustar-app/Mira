@@ -29,3 +29,14 @@ def video_to_text(video_path):
         if os.path.exists(audio_path):
             os.remove(audio_path)
     return text
+
+def fill_config_with_env(config: dict) -> dict:
+    key_env_map = {
+        "chat_api_key": "CHAT_API_KEY",
+        "tavily_api_key": "TAVILY_API_KEY",
+    }
+    new_config = config.copy()
+    for key, env_name in key_env_map.items():
+        if new_config.get(key, "") == "default":
+            new_config[key] = os.getenv(env_name, "")
+    return new_config

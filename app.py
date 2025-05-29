@@ -1,11 +1,8 @@
 # app.py
-import sys
-import os
-print("当前工作目录（启动路径）:", os.getcwd())
-
+from datetime import datetime
 from graphs.mira_graph import mira_graph
 from tools.common.formatters import format_messages, dict_to_markdown
-from tools.common.utils import video_to_text
+from tools.common.utils import video_to_text, fill_config_with_env
 import gradio as gr
 from langgraph.types import Command
 from utils.loggers import MiraLog
@@ -16,8 +13,36 @@ from frontend.profile_tab import render_profile_tab
 from frontend.products_tab import render_products_tab
 from frontend.custom_css import custom_css
 from dotenv import load_dotenv
+from config import MIRA_GREETING_PROMPT
 
 load_dotenv()
+
+def get_current_time_and_season():
+    now = datetime.now()
+    
+    season_map = {
+        (12, 1, 2): "冬季",
+        (3, 4, 5): "春季",
+        (6, 7, 8): "夏季",
+        (9, 10, 11): "秋季"
+    }
+    
+    current_season = next(season for months, season in season_map.items() if now.month in months)
+    current_time = now.strftime("%H:%M")
+    
+    return current_time, current_season
+
+def generate_greeting_prompt(app_state):
+    current_time, season = get_current_time_and_season()
+    user_profile = app_state['profile']
+    products_directory = app_state['products']
+    greeting_prompt = MIRA_GREETING_PROMPT.format(
+        current_time=current_time,
+        season=season,
+        user_profile=user_profile,
+        products_directory=products_directory
+    )
+    return greeting_prompt
 
 def combine_msg(chat, msg):
     # 如果最后一条消息是进度信息，则可以覆盖
@@ -28,16 +53,7 @@ def combine_msg(chat, msg):
         chat.append({"role": "assistant", "content": msg["content"], "type": msg["type"]})
     return chat
 
-def fill_config_with_env(config: dict) -> dict:
-    key_env_map = {
-        "chat_api_key": "CHAT_API_KEY",
-        "tavily_api_key": "TAVILY_API_KEY",
-    }
-    new_config = config.copy()
-    for key, env_name in key_env_map.items():
-        if new_config.get(key, "") == "default":
-            new_config[key] = os.getenv(env_name, "")
-    return new_config
+
 
 def extract_profile_values(profile):
     return [
@@ -79,7 +95,13 @@ def extract_config_values(config):
         config.get('chat_api_key', ''),
         config.get('chat_api_base', ''),
         config.get('chat_model_name', ''),
-        config.get('chat_style', '温柔治愈') or '温柔治愈',
+        config.get('voice_model_name', ''),
+        config.get('character_setting', {}).get('name', ''),
+        config.get('character_setting', {}).get('personality', ''),
+        config.get('character_setting', {}).get('background', ''),
+        config.get('character_setting', {}).get('tone', ''),
+        config.get('character_setting', {}).get('expertise', ''),
+        config.get('character_setting', {}).get('interaction_style', ''),
         config.get('tavily_api_key', ''),
         config.get('use_youcam', False),
         config.get('youcam_api_key', ''),
@@ -129,12 +151,14 @@ def process_user_input(video, text, chat, state):
         if msg_type == "progress":
             chat = combine_msg(chat, {"content": content, "type": "progress"})
             yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+
         elif msg_type == "final":
             markdown = dict_to_markdown(content['markdown']) if content.get('markdown') else ""
             state['profile'].update(content['profile']) if content.get('profile') else None
             state['products'].append(content['product']) if content.get('product') else None
             chat = combine_msg(chat, {"content": content["response"], "type": "final"}) if content.get("response") else chat
             yield chat, markdown, state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+
         else:
             yield chat, "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
@@ -154,7 +178,16 @@ def build_demo():
                     with gr.Row():
                         with gr.Column(scale=2):
                             gr.Markdown("#### 🤖 AI对话区")
-                            chat_out = gr.Chatbot(label="AI对话", value=[], type="messages")
+                            greeting_prompt = generate_greeting_prompt(app_state.value)
+                            app_state.value['config']['greeting_prompt'] = greeting_prompt
+                            # greeting_response = multimodal_chat_agent([], fill_config_with_env(app_state.value['config']))
+                            greeting_response = mira_graph.invoke({"messages": format_messages(None, greeting_prompt)}, {"configurable": fill_config_with_env(app_state.value['config'])}, stream_mode=["custom"])
+                            response = ""
+                            for mode, chunk in greeting_response:
+                                if mode == "custom" and chunk['type'] == "final":
+                                    response = chunk['content']['response']
+                            chat_out = gr.Chatbot(label="AI对话", value=[{"role": "assistant", "content": response, "type": "final"}], elem_id="chat-out", type="messages")
+                                
                         with gr.Column(scale=1):
                             gr.Markdown("#### 🧾 结构化反馈区")
                             markdown_out = gr.Markdown(label="结构化分析结果", elem_id="feedback-md")
@@ -165,7 +198,8 @@ def build_demo():
             products_widgets = render_products_tab(app_state)
         with gr.Tab("🎛 配置"):
             config_widgets = render_config_tab(app_state)
-        # 主回调 outputs 绑定所有控件
+
+
         submit_btn.click(
             process_user_input,
             inputs=[video_in, text_in, chat_out, app_state],
@@ -174,7 +208,24 @@ def build_demo():
         def new_chat(state):
             state['config']['thread_id'] = str(uuid.uuid4())
             state['resume'] = False
-            return [], "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+            greeting_prompt = generate_greeting_prompt(state)
+            state['config']['greeting_prompt'] = greeting_prompt
+            greeting_response = mira_graph.invoke({"messages": format_messages(None, greeting_prompt)}, {"configurable": fill_config_with_env(state['config'])}, stream_mode=["custom"])
+            chat = []
+            response = ""
+            first_chunk = True  
+            for mode, chunk in greeting_response:
+                if mode == "custom" and chunk['type'] == "progress":
+                    if first_chunk:
+                        first_chunk = False
+                        continue
+                    else:
+                        response = chunk['content']
+                    yield combine_msg(chat, {"content": response, "type": "progress"}), "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+                elif mode == "custom" and chunk['type'] == "final":
+                    response = chunk['content']['response']
+                    yield combine_msg(chat, {"content": response, "type": "final"}), "", state, None, "", *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+
         new_chat_btn.click(
             new_chat,
             inputs=[app_state],
