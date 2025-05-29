@@ -54,7 +54,6 @@ def combine_msg(chat, msg):
         chat.append({"role": "assistant", "content": msg["content"], "type": msg["type"]})
     return chat
 
-
 def extract_profile_values(profile):
     return [
         profile.get('name', ''),
@@ -108,7 +107,7 @@ def extract_config_values(config):
         config.get('youcam_secret_key', '')
     ]
 
-def process_user_input(video, text, chat, state):
+def process_user_input(video, text, chat, markdown, state):
     if text:
         chat.append({"role": "user", "content": text, "type": "final"})
     if video:
@@ -143,17 +142,17 @@ def process_user_input(video, text, chat, state):
             content = step.get("__interrupt__")[0].value.get("content")
             chat = combine_msg(chat, {"content": content, "type": "final"})
             state['resume'] = True
-            yield chat, "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+            yield chat, markdown, state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
             break
         msg_type = step.get("type")
         content = step.get("content")
         MiraLog("app", f"msg_type: {msg_type}")
         if msg_type == "progress":
             chat = combine_msg(chat, {"content": content, "type": "progress"})
-            yield chat, "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+            yield chat, markdown, state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
         elif msg_type == "final":
-            markdown = dict_to_markdown(content['markdown']) if content.get('markdown') else ""
+            markdown = dict_to_markdown(content['markdown']) if content.get('markdown') else markdown
             state['profile'].update(content['profile']) if content.get('profile') else None
             state['products'].append(content['product']) if content.get('product') else None
             response = content.get("response", "")
@@ -167,8 +166,7 @@ def process_user_input(video, text, chat, state):
             yield chat, markdown, state, None, "", audio_path, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
         else:
-            yield chat, "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
-
+            yield chat, markdown, state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
 def new_chat(state):
             state['config']['thread_id'] = str(uuid.uuid4())
@@ -200,9 +198,10 @@ def build_demo():
         with gr.Accordion("👋 欢迎来到 Mira！我是一面智能镜子，也是你的私人美妆助理和美丽顾问。", open=False):
             gr.Markdown("""
             我可以：
-            * 🔍 帮你了解各种美妆产品
-            * 💄 做你的美貌分析专家
-            * 👩‍🏫 像美妆博主一样教你化妆
+            * 🔍 **产品分析** - "这个护肤品怎么样？" 或 "推荐适合我的粉底液"
+            * 💄 **肤质检测** - "帮我检测下皮肤状况" 或 "我的皮肤有什么问题"
+            * 👩‍🏫 **美妆指导** - "教我画一个约会妆" 或 "教我护肤"
+            * 📝 **个人档案** - "我想创建我的档案" 或 "更新我的档案"
             
             这个demo旨在模拟你与智能镜子的互动体验~
             """, elem_classes="compact-markdown")
@@ -244,8 +243,10 @@ def build_demo():
                         gr.Markdown("""
                         * 🔬 皮肤检测结果
                         * 🔎 产品分析结果
+                        * 💄 化妆或护肤指导计划
                         """, elem_classes="compact-markdown")
                     markdown_out = gr.Markdown(label="分析结果", elem_id="feedback-md")
+                    clear_btn = gr.Button("清空", elem_id="clear-btn")
         with gr.Tab("👤 个人档案"):
             profile_widgets = render_profile_tab(app_state)
         with gr.Tab("💄 产品卡片集"):
@@ -256,7 +257,7 @@ def build_demo():
 
         submit_btn.click(
             process_user_input,
-            inputs=[video_in, text_in, chat_out, app_state],
+            inputs=[video_in, text_in, chat_out, markdown_out, app_state],
             outputs=[chat_out, markdown_out, app_state, video_in, text_in, audio_out] + profile_widgets + products_widgets + config_widgets
         )
 
@@ -264,6 +265,12 @@ def build_demo():
             new_chat,
             inputs=[app_state],
             outputs=[chat_out, markdown_out, app_state, video_in, text_in, audio_out] + profile_widgets + products_widgets + config_widgets
+        )
+
+        clear_btn.click(
+            lambda markdown: "",
+            inputs=[markdown_out],
+            outputs=[markdown_out]
         )
     return demo
 

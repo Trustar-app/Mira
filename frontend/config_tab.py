@@ -31,7 +31,7 @@ def render_config_tab(app_state):
                 generate_btn = gr.Button("生成角色", variant="primary")
                 gr.Markdown("""
                 ✨ 描述你期望的聊天风格，点击生成角色即可
-                * 建议生成后重新开始对话
+                ✨ 建议生成后重新开始对话
                 """, elem_classes="compact-markdown")
         with gr.Row():
             character_name = gr.Textbox(

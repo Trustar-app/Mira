@@ -8,10 +8,9 @@ from langgraph.types import interrupt
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage
 from langgraph.prebuilt import InjectedState, ToolNode
 from typing import Annotated
-from langgraph.types import Command
 from pydantic import BaseModel, Field
 from tools.common.formatters import format_user_info
 
@@ -25,7 +24,7 @@ def generate_plan(state: Annotated[dict, InjectedState], config: RunnableConfig)
     
     system_prompt = (
         "你是一位专业的护肤与化妆计划生成助手。\n\n"
-        "请根据用户信息、产品收藏夹和用户历史对话，生成一份个性化的护肤或化妆方案。\n"
+        "请根据用户信息、用户产品收藏夹和用户历史对话，生成一份个性化的护肤或化妆方案。\n"
         "返回的计划应包含以下字段，并以 **JSON 格式** 输出：\n"
         "{{\n"
         '  "type": "护肤" 或 "化妆",\n'
@@ -54,17 +53,18 @@ def generate_plan(state: Annotated[dict, InjectedState], config: RunnableConfig)
     msg = "完成计划生成，请向用户简要说明当前计划内容，并请求确认" if not state.get("plan") else "生成新计划，请向用户简要说明计划内容，并请求确认"
     response = llm.invoke([SystemMessage(content=system_prompt)] + state.get("messages", []))
     
+    writer = get_stream_writer()
+    writer({"type": "final", "content": {"markdown": response}})
     return msg, {"plan": response}
 
-class InputCollectionInput(BaseModel):
-    query: str = Field(description="你对用户的请求或询问")
 
-@tool("request_user_input", args_schema=InputCollectionInput, return_direct=True)
-def request_user_input(query: str):
+
+@tool("request_user_input", return_direct=True)
+def request_user_input():
     """
     请求用户输入
     """
-    response = interrupt({"type": "interrupt", "content": query})
+    response = interrupt({"type": "interrupt", "content": ""})
     content = []
     if response.get("text"):
         content.append({"type": "text", "text": response.get("text")})
@@ -94,14 +94,14 @@ def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
         "【任务说明】\n"
         "你现在负责根据用户的具体需求和个人信息提供个性化的护肤与化妆方案。\n\n"
         "请遵循以下流程完成你的任务：\n"
-        "1. 如果用户尚未提出明确需求，请调用 request_user_input 工具引导其简要说明当前需求（如：约会妆容、日常护肤、特殊场合等）。\n"
+        "1. 如果用户尚未提出明确需求，请询问用户需求（如：约会妆容、日常护肤、特殊场合等），并调用 request_user_input 工具请求用户输入。\n"
         "2. 一旦获取到简要的需求，就请调用 generate_plan 工具为其制定一套完整的护肤或化妆方案，不要多轮询问用户需求，请直接生成方案。\n"
-        "3. 列出完整方案后，请调用 request_user_input 工具征询用户是否确认：\n"
+        "3. 列出完整方案后，请询问用户是否确认，并调用request_user_input 工具获取用户确认信息：\n"
         "   - 若确认，则进入逐步引导流程；\n"
         "   - 若不确认，请根据用户反馈重新调用 generate_plan 工具制定方案。\n"
         "4. 在逐步引导过程中：\n"
-        "   - 每一步都需提示用户上传视频；\n"
-        "   - 针对上传内容给予专业反馈，并继续下一步。\n"
+        "   - 每一步给出该步骤的简单操作引导，然后请求用户上传视频\n"
+        "   - 针对用户上传的视频内容进行专业点评，在点评后再给出下一步的引导和请求。\n"
         "5. 全部步骤完成后，请对整个体验进行总结，并给予积极鼓励。\n\n"
         "【回复要求】\n"
         "1. 所有回复必须简短、口语化，适合语音播报\n"
@@ -116,11 +116,11 @@ def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
         plan=state.get("plan", "无")
     )
     messages = [SystemMessage(content=system_prompt), *state.get("messages", [])]
-    stream_writer({"type": "progress", "content": "正在分析用户输入..."})
+    stream_writer({"type": "progress", "content": "正在分析..."})
     content_buffer = ""
     first_chunk = True
     llm = ChatOpenAI(
-        model="qwen3-235b-a22b",
+        model=config["configurable"].get("chat_model_name"),
         openai_api_base=config["configurable"].get("chat_api_base"),
         openai_api_key=config["configurable"].get("chat_api_key"),
         streaming=True

@@ -275,118 +275,12 @@ def poll_skin_analysis_task(task_id, access_token, max_retries=30):
     
     raise RuntimeError(f"轮询超时，任务可能仍在处理中")
 
-def skin_analysis(image_base64, config):
-    """
-    调用 YouCam API 进行肤质分析。
-    :param image_base64: base64编码的图像数据字符串
-    :return: 原始分析结果，异常时抛出异常或返回 None
-    """
-    import base64
-    
-    MiraLog("skin_analysis", f"开始肤质分析，输入base64图片长度: {len(image_base64) if image_base64 else 0}")
-    
-    # 1. 获取 access_token
-    access_token = config['configurable'].get("youcam_access_token")
-    if not access_token:
-        access_token = get_access_token(config)
-        if access_token is not None:
-            config['configurable']['youcam_access_token'] = access_token
-        else:
-            MiraLog("skin_analysis", "获取access_token失败", "ERROR")
-            raise RuntimeError("获取access_token失败")
-    
-    # 2. 准备图片数据
-    if not image_base64:
-        MiraLog("skin_analysis", "未提供base64图像数据", "ERROR")
-        raise ValueError("未提供base64图像数据")
-    
-    # 去除可能的base64前缀
-    if ',' in image_base64:
-        image_base64 = image_base64.split(',', 1)[1]
-    
-    # 解码base64数据
-    try:
-        image_bytes = base64.b64decode(image_base64)
-    except Exception as e:
-        MiraLog("skin_analysis", f"Base64解码失败: {e}", "ERROR")
-        raise ValueError(f"Base64解码失败: {e}")
-    
-    # 3. 上传图片
-    file_id = upload_image_for_skin_analysis(image_bytes, access_token)
-    
-    # 4. 发起肤质分析任务
-    task_id = start_skin_analysis_task(file_id, access_token)
-    
-    # 5. 轮询任务状态
-    result = poll_skin_analysis_task(task_id, access_token)
-    
-    MiraLog("skin_analysis", "肤质分析完成")
-    return result
-
-# AI肤质分析结果反馈生成
-
-def skin_feedback(data, config):
-    """
-    用大模型生成肤质分析反馈。
-    :param data: 肤质分析原始结果
-    :return: 反馈文本（str）
-    """
-    MiraLog("skin_analysis", f"[skin_feedback] 生成反馈，输入数据: {data}")
-    
-    # 获取角色设定
-    character_setting = config["configurable"].get("character_setting", {})
-    
-    # 格式化用户信息
-    formatted_info = format_user_info(config.get("user_profile", {}))
-    
-    SYSTEM_PROMPT = (
-        f"你是 {character_setting['name']}，一个专业的美妆顾问和心理陪伴师。\n\n"
-        f"【角色设定】\n"
-        f"性格特点：{character_setting['personality']}\n"
-        f"语气特点：{character_setting['tone']}\n"
-        f"专业领域：{character_setting['expertise']}\n"
-        f"互动风格：{character_setting['interaction_style']}\n\n"
-        "【任务说明】\n"
-        "你现在需要根据用户的肤质检测结果，生成一段自然、连贯、温暖的中文语音回复。\n"
-        "回复内容应尽量涵盖以下四个方面：\n"
-        "—— 检测完成的温馨提示\n"
-        "—— 针对用户肤质的专业分析和建议\n"
-        "—— 充满关怀和鼓励的情感反馈\n"
-        "—— 贴心的下一步互动建议\n\n"
-        "【回复要求】\n"
-        "1. 所有回复必须简短、口语化，适合语音播报\n"
-        "2. 不要使用分点列举的形式回答\n"
-        "3. 不要在回复中包含图片URL或其他非自然语言的内容\n"
-        "4. 每次回复控制在100字以内\n"
-        "5. 使用自然的语气助词和语气词，让对话更生动\n\n"
-        "【肤质检测原始数据】\n"
-        f"{data}\n\n"
-        f"{formatted_info}"
-    )
-    llm = ChatOpenAI(
-        model_name=config['configurable'].get("chat_model_name"), 
-        temperature=0, 
-        openai_api_key=config['configurable'].get("chat_api_key"), 
-        openai_api_base=config['configurable'].get("chat_api_base")
-    )
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content="我的皮肤检测结果怎么样？")
-    ]
-    # 返回生成器，流式输出
-    def stream_gen():
-        for chunk in llm.stream(messages):
-            if hasattr(chunk, 'content') and chunk.content:
-                yield chunk.content
-    return stream_gen()
-
 def extract_best_face_frame(video_base64):
     """
-    从base64编码的视频中采样关键帧，做人脸检测，选取最佳帧，返回最佳帧的base64编码图片。
+    从base64编码的视频中采样关键帧，做人脸检测，选取最佳帧，返回最佳帧的临时文件路径。
     :param video_base64: base64编码的视频数据
-    :return: 最佳帧图片的base64编码(str)，无有效帧时返回 None
+    :return: 最佳帧图片的临时文件路径(str)，无有效帧时返回 None
     """
-
     MiraLog("skin_analysis", f"[extract_best_face_frame] 接收到base64视频数据，长度: {len(video_base64) if video_base64 else 0}")
     
     if not video_base64:
@@ -409,8 +303,9 @@ def extract_best_face_frame(video_base64):
         MiraLog("skin_analysis", f"[extract_best_face_frame] base64解码失败: {e}", "ERROR")
         return None
     
-    # 创建临时文件来存储视频数据，因为av库更好地支持文件
+    # 创建临时文件来存储视频数据
     temp_video_file = None
+    temp_best_frame_file = None
     try:
         # 创建临时文件
         with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_file:
@@ -469,12 +364,12 @@ def extract_best_face_frame(video_base64):
             MiraLog("skin_analysis", f"[extract_best_face_frame] 未找到关键点数>=4的最佳帧，best_kps_count={best_kps_count}", "WARNING")
             return None
         
-        # 将最佳帧转换为base64
-        _, buffer = cv2.imencode('.jpg', best_frame)
-        jpg_as_text = base64.b64encode(buffer).decode('utf-8')
+        # 将最佳帧保存为临时文件
+        temp_best_frame_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False).name
+        cv2.imwrite(temp_best_frame_file, best_frame)
         
         MiraLog("skin_analysis", f"[extract_best_face_frame] 已选取最佳帧，关键点数: {best_kps_count}, 置信度: {best_score}")
-        return jpg_as_text
+        return temp_best_frame_file
         
     except Exception as e:
         MiraLog("skin_analysis", f"[extract_best_face_frame] 处理过程发生异常: {e}", "ERROR")
@@ -483,19 +378,132 @@ def extract_best_face_frame(video_base64):
         return None
         
     finally:
-        # 清理临时文件
+        # 清理临时视频文件
         if temp_video_file and os.path.exists(temp_video_file):
             try:
                 os.unlink(temp_video_file)
             except:
-                pass 
+                pass
 
-def skin_analysis_by_QwenYi(image_base64, config):
+def get_image_base64(image_path):
     """
-    调用 QwenYi API 进行肤质分析。
-    :param image_base64: base64编码的图像数据字符串
+    将图片文件转换为base64编码
+    :param image_path: 图片文件路径
+    :return: base64编码字符串
+    """
+    try:
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode('utf-8')
+    except Exception as e:
+        MiraLog("skin_analysis", f"图片转base64失败: {e}", "ERROR")
+        return None
+
+def skin_analysis(image_path, config):
+    """
+    调用 YouCam API 进行肤质分析。
+    :param image_path: 图片文件路径
     :return: 原始分析结果，异常时抛出异常或返回 None
     """
+    MiraLog("skin_analysis", f"开始肤质分析，输入图片路径: {image_path}")
+    
+    # 1. 获取 access_token
+    access_token = config['configurable'].get("youcam_access_token")
+    if not access_token:
+        access_token = get_access_token(config)
+        if access_token is not None:
+            config['configurable']['youcam_access_token'] = access_token
+        else:
+            MiraLog("skin_analysis", "获取access_token失败", "ERROR")
+            raise RuntimeError("获取access_token失败")
+    
+    # 2. 读取图片数据
+    try:
+        with open(image_path, "rb") as image_file:
+            image_bytes = image_file.read()
+    except Exception as e:
+        MiraLog("skin_analysis", f"读取图片文件失败: {e}", "ERROR")
+        raise ValueError(f"读取图片文件失败: {e}")
+    
+    # 3. 上传图片
+    file_id = upload_image_for_skin_analysis(image_bytes, access_token)
+    
+    # 4. 发起肤质分析任务
+    task_id = start_skin_analysis_task(file_id, access_token)
+    
+    # 5. 轮询任务状态
+    result = poll_skin_analysis_task(task_id, access_token)
+    
+    MiraLog("skin_analysis", "肤质分析完成")
+    return result
+
+# AI肤质分析结果反馈生成
+
+def skin_feedback(data, config):
+    """
+    用大模型生成肤质分析反馈。
+    :param data: 肤质分析原始结果
+    :return: 反馈文本（str）
+    """
+    import json
+    data = json.dumps(data, ensure_ascii=False)
+    # 获取角色设定
+    character_setting = config["configurable"].get("character_setting", {})
+    
+    # 格式化用户信息
+    formatted_info = format_user_info(config.get("user_profile", {}))
+    
+    SYSTEM_PROMPT = (
+        f"你是 {character_setting['name']}，一个专业的美妆顾问和心理陪伴师。\n\n"
+        f"【角色设定】\n"
+        f"性格特点：{character_setting['personality']}\n"
+        f"语气特点：{character_setting['tone']}\n"
+        f"专业领域：{character_setting['expertise']}\n"
+        f"互动风格：{character_setting['interaction_style']}\n\n"
+        "【任务说明】\n"
+        "你现在需要根据用户的肤质检测结果，生成一段自然、连贯、温暖的中文语音回复。\n"
+        "回复内容应尽量涵盖以下四个方面：\n"
+        "—— 检测完成的温馨提示\n"
+        "—— 针对用户肤质的专业分析和建议\n"
+        "—— 充满关怀和鼓励的情感反馈\n"
+        "—— 贴心的下一步互动建议\n\n"
+        "【回复要求】\n"
+        "1. 所有回复必须简短、口语化，适合语音播报\n"
+        "2. 不要使用分点列举的形式回答\n"
+        "3. 不要在回复中包含图片URL或其他非自然语言的内容\n"
+        "4. 每次回复控制在100字以内\n"
+        "5. 使用自然的语气助词和语气词，让对话更生动\n\n"
+        "【肤质检测原始数据】\n"
+        f"{data}\n\n"
+        f"{formatted_info}"
+    )
+    llm = ChatOpenAI(
+        model_name=config['configurable'].get("chat_model_name"), 
+        temperature=0, 
+        openai_api_key=config['configurable'].get("chat_api_key"), 
+        openai_api_base=config['configurable'].get("chat_api_base")
+    )
+    messages = [
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(content="我的皮肤检测结果怎么样？")
+    ]
+    # 返回生成器，流式输出
+    def stream_gen():
+        for chunk in llm.stream(messages):
+            if hasattr(chunk, 'content') and chunk.content:
+                yield chunk.content
+    return stream_gen()
+
+def skin_analysis_by_QwenYi(image_path, config):
+    """
+    调用 QwenYi API 进行肤质分析。
+    :param image_path: 图片文件路径
+    :return: 原始分析结果，异常时抛出异常或返回 None
+    """
+    # 将图片转换为base64
+    image_base64 = get_image_base64(image_path)
+    if not image_base64:
+        raise ValueError("图片转base64失败")
+
     SYSTEM_PROMPT = (
         "你是一个专业的皮肤健康检测人员，请根据用户的照片检测结果，生成一个json形式的肤质检测结果。\n"
         "针对：斑点、皱纹、毛孔、发红、出油、痘痘、黑眼圈、眼袋、泪沟、皮肤紧致度 这10个维度，给出评分（0～10分，0分表示没有，10分表示非常严重）\n"

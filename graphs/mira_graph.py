@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 from state import MiraState, ConfigState
-from tools.mira_tools import recognize_intent_with_current_flow, multimodal_chat_agent, recognize_intent
+from tools.mira_tools import recognize_intent, multimodal_chat_agent
 from graphs.user_profile_creation_graph import user_profile_creation_graph
 from graphs.skin_analysis_graph import skin_analysis_graph
 from graphs.product_analysis_graph import product_analysis_graph
@@ -29,20 +29,19 @@ def mira(state: MiraState, config: RunnableConfig) -> Command[Literal["user_prof
     """
     writer = get_stream_writer()
     writer({"type": "progress", "content": "正在识别意图..."})
-    intent = recognize_intent(state["messages"][-1].content, config)
+    intent = recognize_intent(state, config)
     MiraLog("mira_graph", f"意图识别结果: {intent}")
     
     if intent in intent_to_subgraph:
         return Command(goto=intent_to_subgraph[intent], update={"current_flow": intent})
     else:
-
         response = multimodal_chat_agent(state["messages"], config['configurable'], streaming=True)
         buffer = ""
         for chunk in response:
             buffer += chunk
             writer({"type": "progress", "content": buffer})
         writer({"type": "final", "content": {"response": buffer}})
-        return {"messages": [AIMessage(content=buffer)]}
+        return {"messages": [AIMessage(content=buffer)], "current_flow": None}
 
 
 # 构建主流程 Graph
@@ -69,75 +68,79 @@ def build_main_graph():
 
 def call_skin_analysis_subgraph(state: MiraState, config: RunnableConfig):
     if state.get("resume", False):
-        intent = recognize_intent_with_current_flow(state["messages"][-1].content, state.get("current_flow"), config)
+        intent = recognize_intent(state, config)
         if intent != state.get("current_flow"):
-            return Command(goto=intent_to_subgraph[intent])
+            return Command(goto=intent_to_subgraph[intent], update={"current_flow": intent, "resume": False})
 
     subgraph_input = {
         "user_profile": state.get("user_profile"),
         "products_directory": state.get("products_directory"),
-        "messages": state.get("messages", []),
+        "messages": state.get("skin_analysis_messages", []) + state.get("messages", [])[-1:],
     }
     subgraph_output = skin_analysis_graph.invoke(subgraph_input, config=config)
     return {
         "user_profile": subgraph_output.get("user_profile"),
         "products_directory": subgraph_output.get("products_directory"),
-        "messages": subgraph_output.get("messages"),
+        "messages": subgraph_output.get("messages")[-1:],
+        "skin_analysis_messages": subgraph_output.get("messages"),
     }
 
 def call_care_makeup_guide_subgraph(state: MiraState, config: RunnableConfig):
     if state.get("resume", False):
-        intent = recognize_intent_with_current_flow(state["messages"][-1].content, state.get("current_flow"), config)
+        intent = recognize_intent(state, config)
         if intent != state.get("current_flow"):
             return Command(goto=intent_to_subgraph[intent], update={"current_flow": intent, "resume": False})
         
     subgraph_input = {
         "user_profile": state.get("user_profile"),
         "products_directory": state.get("products_directory"),
-        "messages": state.get("messages", [])[-1:],
+        "messages": state.get("care_makeup_guide_messages", []) + state.get("messages", [])[-1:],
     }
     subgraph_output = care_makeup_guide_graph.invoke(subgraph_input, config=config)
     return {
         "user_profile": subgraph_output.get("user_profile"),
         "products_directory": subgraph_output.get("products_directory"),
         "messages": subgraph_output.get("messages")[-1:],
+        "care_makeup_guide_messages": subgraph_output.get("messages"),
     }
 
 def call_product_analysis_subgraph(state: MiraState, config: RunnableConfig):
     if state.get("resume", False):
-        intent = recognize_intent_with_current_flow(state["messages"][-1].content, state.get("current_flow"), config)
+        intent = recognize_intent(state, config)
         if intent != state.get("current_flow"):
             return Command(goto=intent_to_subgraph[intent], update={"current_flow": intent, "resume": False})
         
     subgraph_input = {
         "user_profile": state.get("user_profile"),
         "products_directory": state.get("products_directory"),
-        "messages": state.get("messages", [])[-1:],
+        "messages": state.get("product_analysis_messages", []) + state.get("messages", [])[-1:],
     }
     subgraph_output = product_analysis_graph.invoke(subgraph_input, config=config)
     return {
         "user_profile": subgraph_output.get("user_profile"),
         "products_directory": subgraph_output.get("products_directory"),
         "messages": subgraph_output.get("messages")[-1:],
+        "product_analysis_messages": subgraph_output.get("messages"),
     }
     
 
 def call_user_profile_creation_subgraph(state: MiraState, config: RunnableConfig):
     if state.get("resume", False):
-        intent = recognize_intent_with_current_flow(state["messages"][-1].content, state.get("current_flow"), config)
+        intent = recognize_intent(state, config)
         if intent != state.get("current_flow"):
             return Command(goto=intent_to_subgraph[intent], update={"current_flow": intent, "resume": False})
         
     subgraph_input = {
         "user_profile": state.get("user_profile"),
         "products_directory": state.get("products_directory"),
-        "messages": state.get("messages", []),
+        "messages": state.get("user_profile_creation_messages", []) + state.get("messages", [])[-1:],
     }
     subgraph_output = user_profile_creation_graph.invoke(subgraph_input)
     return {
         "user_profile": subgraph_output.get("user_profile"),
         "products_directory": subgraph_output.get("products_directory"),
-        "messages": subgraph_output.get("messages"),
+        "messages": subgraph_output.get("messages")[-1:],
+        "user_profile_creation_messages": subgraph_output.get("messages"),
     }
 
 mira_graph = build_main_graph()

@@ -59,76 +59,90 @@ def format_messages(video, text):
     
     return messages
 
-def format_skin_check(skin_state):
-    """
-    格式化肤质检测结果
-    """
-    skin_result_dict = {}
-    # 修改这一行
-    skin_result_dict["chat"] = [{"role": "assistant", "content": skin_state["analysis_report"]}]
-    skin_result_dict["markdown"] = skin_state["skin_analysis_result"]
-    image = skin_state["best_face_image"]
-    if image.startswith("mockdata/"):
-        # 模拟数据，从项目根目录读取图片
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-        image_path = os.path.join(project_root, image)
-        
-        # 确认文件存在
-        if os.path.exists(image_path):
-            # 读取图片数据
-            img = Image.open(image_path)
-            skin_result_dict["image"] = img
-        else:
-            MiraLog('app', f"模拟图片文件不存在: {image_path}")
-    else:  
-        try:
-            import base64
-            from PIL import Image
-            import io
-            
-            # 处理base64前缀
-            if "base64," in image:
-                image = image.split("base64,")[1]
-            
-            # 处理填充
-            missing_padding = len(image) % 4
-            if missing_padding:
-                image += "=" * (4 - missing_padding)
-            
-            # 解码并转换为PIL Image
-            image_data = base64.b64decode(image)
-            pil_image = Image.open(io.BytesIO(image_data))
-            
-            # 保存为PIL图像对象
-            skin_result_dict["image"] = pil_image
-        except Exception as e:
-            MiraLog('app', f"将base64转换为PIL图像时出错: {e}")
-            skin_result_dict["image"] = None
-
-    skin_result_dict["gallery"] = []
-    skin_result_dict["profile"] = ""
-    skin_result_dict["products"] = []
-
-    return skin_result_dict
-
 def dict_to_markdown(d, indent=0):
-    """将结构化 dict 转为 markdown 格式字符串，主项之间用两个换行隔开"""
+    """
+    将结构化 dict 转为 markdown 格式字符串
+    支持特殊类型：护肤/化妆计划、产品检索结果、肤质分析结果等
+    """
     markdown = ""
     prefix = "  " * indent  # 两个空格缩进
+
+    # 特殊类型处理
+    if "type" in d and "steps" in d:  # 护肤/化妆计划
+        markdown += f"{prefix}### {d['type']}计划\n\n"
+        for i, step in enumerate(d["steps"], 1):
+            markdown += f"{prefix}#### 步骤 {i}: {step['step_name']}\n\n"
+            markdown += f"{prefix}- **使用产品**: {step['product_type']}\n"
+            markdown += f"{prefix}- **操作说明**: {step['instructions']}\n"
+            if step.get('notes'):
+                markdown += f"{prefix}- **注意事项**: {step['notes']}\n"
+            markdown += "\n"
+        return markdown
+
+    if "query" in d and "results" in d:  # 产品检索结果
+        markdown += f"{prefix}### 检索结果\n\n"
+        markdown += f"{prefix}**搜索词**: {d['query']}\n\n"
+        for i, result in enumerate(d["results"], 1):
+            markdown += f"{prefix}#### {i}. {result['title']}\n\n"
+            markdown += f"{prefix}{result['content'][:200]}...\n\n"  # 限制内容长度
+            markdown += f"{prefix}[查看详情]({result['url']})\n\n"
+        if d.get("images"):
+            markdown += f"{prefix}### 相关图片\n\n"
+            for img_url in d["images"][:3]:  # 限制图片数量
+                markdown += f"{prefix}![产品图片]({img_url})\n"
+        return markdown
+
+    if "skin_quality" in d:  # 肤质分析结果
+        markdown += f"{prefix}### 肤质检测结果\n\n"
+        
+        # 显示检测图片
+        if d.get("image"):
+            markdown += f"{prefix}#### 检测图片\n\n"
+            # 确保 base64 字符串格式正确
+            image_base64 = d["image"]
+            if "base64," not in image_base64:
+                image_base64 = f"data:image/jpeg;base64,{image_base64}"
+            markdown += f"{prefix}![检测图片]({image_base64})\n\n"
+        
+        # 分组展示评分
+        markdown += f"{prefix}#### 评分详情\n\n"
+        scores = d["skin_quality"]
+        groups = {
+            "基础肤质": ["spot", "wrinkle", "pore", "redness", "oiliness", "acne"],
+            "眼部状况": ["dark_circle", "eye_bag", "tear_trough"],
+            "整体状态": ["firmness"]
+        }
+        
+        for group_name, metrics in groups.items():
+            markdown += f"{prefix}##### {group_name}\n\n"
+            for metric in metrics:
+                if metric in scores:
+                    score = scores[metric]
+                    score_bar = "▓" * int(score) + "░" * (10 - int(score))
+                    markdown += f"{prefix}- **{en_to_cn(metric)}**: {score_bar} ({score}/10)\n"
+            markdown += "\n"
+        return markdown
+
+    # 通用字典处理
     for key, value in d.items():
+        if key == "image":  # 跳过图片字段,因为已经在特殊处理中展示
+            continue
+            
         key = en_to_cn(key)
         if isinstance(value, dict):
-            markdown += f"{prefix}- **{key}**:\n\n"
+            markdown += f"{prefix}### {key}\n\n"
             markdown += dict_to_markdown(value, indent + 1)
         elif isinstance(value, list):
-            markdown += f"{prefix}- **{key}**:\n\n"
-            for item in value:
-                if isinstance(item, dict):
+            if value and isinstance(value[0], dict):
+                markdown += f"{prefix}### {key}\n\n"
+                for item in value:
                     markdown += dict_to_markdown(item, indent + 1)
-                else:
-                    markdown += f"{prefix}  - {item}\n\n"
+            else:
+                items = ", ".join(str(item) for item in value)
+                markdown += f"{prefix}- **{key}**: {items}\n\n"
         else:
             markdown += f"{prefix}- **{key}**: {value}\n\n"
+    
     return markdown
 
 # 英文key转中文
@@ -228,7 +242,7 @@ def format_user_info(user_profile: Union[UserProfile, Dict[str, Any]], products_
     
     # 处理产品目录
     if products_directory:
-        markdown += "\n【产品目录】\n"
+        markdown += "\n【用户产品目录】\n"
         for product in products_directory:
             product_info = {k: v for k, v in product.items() if v and k != "image_url"}  # 移除空值和图片URL
             if product_info:

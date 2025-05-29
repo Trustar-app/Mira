@@ -186,16 +186,24 @@ class MiraState(TypedDict, total=False):
     messages: Annotated[List[AnyMessage], add_messages]
     current_flow: Optional[str]
 
+    # 子图的messages
+    skin_analysis_messages: List[AnyMessage]
+    product_analysis_messages: List[AnyMessage]
+    care_makeup_guide_messages: List[AnyMessage]
+    user_profile_creation_messages: List[AnyMessage]
+
 class SkinAnalysisState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
     products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
+    current_flow: Optional[str]
 
     # 中间产物
     current_video_base64: Optional[str]
-    best_face_image: Optional[str]   # 最佳脸部图片路径
+    best_face_image: Optional[str]   # 最佳脸部图片base64编码
+    best_face_path: Optional[str]   # 最佳脸部图片临时文件路径
     face_detected: Optional[bool]    # 是否检测到人脸
-    skin_analysis_result: Optional[str]   # JSON字符串形式的肤质分析结果
+    skin_analysis_result: Optional[Dict[str, Any]]   # JSON字符串形式的肤质分析结果
     analysis_report: Optional[str]        # AI生成的个性化解读
 
 
@@ -203,6 +211,7 @@ class UserProfileEditState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
     products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
+    current_flow: Optional[str]
 
     basic_info: Annotated[Dict[str, Any], dict_merge_reducer]
 
@@ -211,6 +220,7 @@ class CareMakeupGuideState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
     products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
+    current_flow: Optional[str]
 
     plan: Optional[str] # 护肤/化妆计划
 
@@ -219,6 +229,7 @@ class ProductAnalysisState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
     products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
+    current_flow: Optional[str]
 
     # 中间产物
     product_structured_info: Optional[Dict[str, Any]]  # 网络检索到的结构化产品信息
