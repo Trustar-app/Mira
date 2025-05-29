@@ -18,7 +18,7 @@ def gender_selection_node(state: UserProfileEditState, config: RunnableConfig):
     response = interrupt({"type": "interrupt", "content": "嗨～能告诉我你的性别吗？"}).get("text")
     # 更新 State
     return {
-        "user_profile": {"gender": response}, 
+        "basic_info": {"gender": response}, 
         "messages": [
             AIMessage(content="嗨～能告诉我你的性别吗？"),
             HumanMessage(content=response)
@@ -31,7 +31,7 @@ def age_input_node(state: UserProfileEditState):
     response = interrupt({"type": "interrupt", "content": "你今年多大啦？"}).get("text")
     # 更新 State
     return {
-        "user_profile": {"age": response}, 
+        "basic_info": {"age": response}, 
         "messages": [
             AIMessage(content="你今年多大啦？"),
             HumanMessage(content=response)
@@ -74,7 +74,7 @@ def face_feature_analysis_node(state: UserProfileEditState, config: RunnableConf
 
     # 更新 State
     return {
-        "user_profile": {
+        "basic_info": {
             "face_features": features.get("face_features"),
             "skin_color": features.get("skin_color"),
             "skin_type": features.get("skin_type")
@@ -102,7 +102,7 @@ def skincare_skill_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", f"进入节点：护肤专业度打分")
     response = interrupt({"type": "interrupt", "content": "那护肤呢？你觉得自己在护肤方面的水平如何（0-10分）？"}).get("text")
     return {
-        "user_profile": {"skincare_skill_level": response},
+        "basic_info": {"skincare_skill_level": response},
         "messages": [
             AIMessage(content="那护肤呢？你觉得自己在护肤方面的水平如何（0-10分）？"),
             HumanMessage(content=response)
@@ -114,7 +114,7 @@ def user_preferences_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", f"进入节点：个人诉求与偏好收集")
     response = interrupt({"type": "interrupt", "content": "说说看，你最希望在护肤和化妆方面达到什么效果呢？有什么特别喜欢或不喜欢的风格吗？"}).get("text")
     return {
-        "user_profile": {"user_preferences": response},
+        "basic_info": {"user_preferences": response},
         "messages": [
             AIMessage(content="说说看，你最希望在护肤和化妆方面达到什么效果呢？有什么特别喜欢或不喜欢的风格吗？"),
             HumanMessage(content=response)
@@ -126,7 +126,7 @@ def name_input_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", f"进入节点：用户名采集")
     response = interrupt({"type": "interrupt", "content": "最后一个问题啦～我该怎么称呼你呢？"}).get("text")
     return {
-        "user_profile": {"name": response},
+        "basic_info": {"name": response},
         "messages": [
             AIMessage(content="最后一个问题啦～我该怎么称呼你呢？"),
             HumanMessage(content=response)
@@ -137,13 +137,10 @@ def name_input_node(state: UserProfileEditState):
 def profile_generate_node(state: UserProfileEditState):
     MiraLog("user_profile_creation", f"进入节点：档案生成与保存")
     writer = get_stream_writer()
-    msg = f"您的用户档案已生成，请查看结构化展示区的结果"
-    writer({"type": "final", "content": {"response": msg, "markdown": state["user_profile"], "profile": state["user_profile"]}})
-    return {
-        "messages": [
-            AIMessage(content=msg)
-        ]
-    }
+    msg = f"您的用户档案已经生成啦，可以进入“个人档案”页面查看哦"
+    state['user_profile'].update(state['basic_info'])
+    writer({"type": "final", "content": {"response": msg, "markdown": state["basic_info"], "profile": state["basic_info"]}})
+    return state
 
 # 构建子流程 Graph
 def build_user_profile_graph():

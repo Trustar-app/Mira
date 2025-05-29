@@ -134,8 +134,7 @@ def default_config_state():
         "chat_api_key": "default",
         "chat_api_base": os.getenv("CHAT_API_BASE", ""),
         "chat_model_name": os.getenv("CHAT_MODEL_NAME", ""),
-        "audio_model_name": os.getenv("AUDIO_MODEL_NAME", ""),
-        "tts_api_key": os.getenv("TTS_API_KEY", ""),
+        "audio_model_name": "Cherry",
         "chat_style": os.getenv("CHAT_STYLE", ""),
         "character_setting": default_character_setting(),
         "tavily_api_key": "default",
@@ -151,7 +150,7 @@ class ConfigState(TypedDict, total=False):
     chat_api_base: str
     chat_model_name: str
     audio_model_name: str
-    chat_style: str  # 聊天风格：诚实朋友、温柔治愈、毒舌幽默
+    chat_style: str  
     character_setting: CharacterSetting
 
     greeting_prompt: str  # 第一句引导问候语（需要在前端隐藏）

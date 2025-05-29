@@ -124,7 +124,7 @@ def _ensure_cache_cleanup():
     except Exception as e:
         MiraLog("tts", f"检查缓存状态时出错：{str(e)}")
 
-def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE_DIR) -> str:
+def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE_DIR, api_key: str = None) -> str:
     """
     将文本转换为语音并保存为音频文件
     
@@ -132,6 +132,7 @@ def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE
         text: 要转换的文本
         voice: 语音类型，默认使用 "Cherry"
         save_dir: 音频文件保存目录，默认为 AUDIO_CACHE_DIR
+        api_key: API key，如果不提供则使用环境变量中的 TTS_API_KEY
     
     Returns:
         str: 保存的音频文件路径，如果失败则返回 None
@@ -151,13 +152,13 @@ def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE
         # 调用 TTS API
         response = dashscope.audio.qwen_tts.SpeechSynthesizer.call(
             model="qwen-tts",
-            api_key=os.getenv("TTS_API_KEY"),
+            api_key=api_key,
             text=text,
             voice=voice,
         )
         
         if not response or not response.output or not response.output.audio:
-            print("TTS API 返回结果异常")
+            MiraLog("tts", "TTS API 返回结果异常", "ERROR")
             return None
             
         audio_url = response.output.audio["url"]
@@ -169,11 +170,11 @@ def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE
         with open(save_path, 'wb') as f:
             f.write(response.content)
             
-        print(f"音频文件已保存至：{save_path}")
+        MiraLog("tts", f"音频文件已保存至：{save_path}")
         return save_path
         
     except Exception as e:
-        print(f"TTS 转换失败：{str(e)}")
+        MiraLog("tts", f"TTS 转换失败：{str(e)}", "ERROR")
         return None
 
 def init_audio_cache():

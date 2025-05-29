@@ -161,7 +161,12 @@ def process_user_input(video, text, chat, markdown, state):
             # 对 final 消息进行 TTS 处理
             audio_path = None
             if response:
-                audio_path = text_to_speech(response, voice="Cherry", save_dir="audio_cache")
+                audio_path = text_to_speech(
+                    response,
+                    voice=config_for_graph['audio_model_name'],
+                    save_dir="audio_cache",
+                    api_key=config_for_graph['chat_api_key']
+                )
             
             yield chat, markdown, state, None, "", audio_path, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
@@ -169,28 +174,33 @@ def process_user_input(video, text, chat, markdown, state):
             yield chat, markdown, state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
 def new_chat(state):
-            state['config']['thread_id'] = str(uuid.uuid4())
-            state['resume'] = False
-            greeting_prompt = generate_greeting_prompt(state)
-            state['config']['greeting_prompt'] = greeting_prompt
-            greeting_response = mira_graph.invoke({"messages": format_messages(None, greeting_prompt)}, {"configurable": fill_config_with_env(state['config'])}, stream_mode=["custom"])
-            chat = []
-            response = ""
-            first_chunk = True  
-            for mode, chunk in greeting_response:
-                if mode == "custom" and chunk['type'] == "progress":
-                    if first_chunk:
-                        first_chunk = False
-                        continue
-                    else:
-                        response = chunk['content']
-                    yield combine_msg(chat, {"content": response, "type": "progress"}), "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
-                elif mode == "custom" and chunk['type'] == "final":
-                    response = chunk['content']['response']
-                    chat = combine_msg(chat, {"content": response, "type": "final"})
-                    # 对欢迎语进行 TTS 处理
-                    audio_path = text_to_speech(response, voice="Cherry", save_dir="audio_cache") if response else None
-                    yield chat, "", state, None, "", audio_path, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+    state['config']['thread_id'] = str(uuid.uuid4())
+    state['resume'] = False
+    greeting_prompt = generate_greeting_prompt(state)
+    state['config']['greeting_prompt'] = greeting_prompt
+    greeting_response = mira_graph.invoke({"messages": format_messages(None, greeting_prompt)}, {"configurable": fill_config_with_env(state['config'])}, stream_mode=["custom"])
+    chat = []
+    response = ""
+    first_chunk = True  
+    for mode, chunk in greeting_response:
+        if mode == "custom" and chunk['type'] == "progress":
+            if first_chunk:
+                first_chunk = False
+                continue
+            else:
+                response = chunk['content']
+            yield combine_msg(chat, {"content": response, "type": "progress"}), "", state, None, "", None, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
+        elif mode == "custom" and chunk['type'] == "final":
+            response = chunk['content']['response']
+            chat = combine_msg(chat, {"content": response, "type": "final"})
+            # 对欢迎语进行 TTS 处理
+            audio_path = text_to_speech(
+                response,
+                voice=fill_config_with_env(state['config'])['audio_model_name'],
+                save_dir="audio_cache",
+                api_key=fill_config_with_env(state['config'])['chat_api_key']
+            ) if response else None
+            yield chat, "", state, None, "", audio_path, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
 def build_demo():
     with gr.Blocks(theme=gr.themes.Soft(), css=custom_css) as demo:
@@ -235,8 +245,9 @@ def build_demo():
                     for mode, chunk in greeting_response:
                         if mode == "custom" and chunk['type'] == "final":
                             response = chunk['content']['response']
+                    audio_path = text_to_speech(response, voice=fill_config_with_env(app_state.value['config'])['audio_model_name'], save_dir="audio_cache", api_key=fill_config_with_env(app_state.value['config'])['chat_api_key'])
                     chat_out = gr.Chatbot(label="AI对话", value=[{"role": "assistant", "content": response, "type": "final"}], elem_id="chat-out", type="messages")
-                    audio_out = gr.Audio(label="AI语音", elem_id="audio-out", autoplay=True)
+                    audio_out = gr.Audio(label="AI语音", elem_id="audio-out", value=audio_path, autoplay=True)
                 with gr.Column(scale=1):
                     gr.Markdown("#### 🔍 分析结果")
                     with gr.Accordion("💡 这里会显示更详细的分析结果：", open=False):

@@ -59,6 +59,11 @@ def setup_logger(
             # 确保logs目录存在
             os.makedirs("logs", exist_ok=True)
             file_path = f"logs/{name}.log"
+        else:
+            # 确保指定的日志文件目录存在
+            log_dir = os.path.dirname(file_path)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
         
         # 如果需要清空日志文件
         if clear_existing_log and os.path.exists(file_path):

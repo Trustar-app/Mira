@@ -21,7 +21,11 @@ def render_config_tab(app_state):
             chat_api_base = gr.Textbox(label="聊天模型的 Base URL", value=config.get('chat_api_base', ''))
         with gr.Row():
             chat_model_name = gr.Textbox(label="聊天模型的模型名称", value=config.get('chat_model_name', ''))
-            voice_model_name = gr.Textbox(label="语音模型的模型名称", value=config.get('voice_model_name', ''))
+            voice_model_name = gr.Dropdown(
+                label="语音音色",
+                choices=["Cherry", "Serena", "Ethan", "Chelsie"],
+                value=config.get('audio_model_name', 'Cherry')
+            )
         
         # 角色设定
         gr.Markdown("### 👤 角色设定")
@@ -103,13 +107,15 @@ def render_config_tab(app_state):
                 ''
             )
 
-        def save_config(chat_api_key, chat_api_base, chat_model_name, chat_style, 
-                       character_name, character_personality, character_background,
-                       character_tone, character_expertise, character_interaction,
-                       tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key, state):
+        def save_config(chat_api_key, chat_api_base, chat_model_name, voice_model_name,
+                character_name, character_personality, character_background,
+                character_tone, character_expertise, character_interaction,
+                tavily_api_key, use_youcam, youcam_api_key, youcam_secret_key,
+                state):
             state['config']['chat_api_key'] = chat_api_key
             state['config']['chat_api_base'] = chat_api_base
             state['config']['chat_model_name'] = chat_model_name
+            state['config']['audio_model_name'] = voice_model_name
             state['config']['chat_style'] = chat_style
             state['config']['character_setting'] = {
                 'name': character_name,
