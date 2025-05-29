@@ -185,10 +185,17 @@ class MiraState(TypedDict, total=False):
     messages: Annotated[List[AnyMessage], add_messages]
     current_flow: Optional[str]
 
+    # 子图的messages
+    skin_analysis_messages: List[AnyMessage]
+    product_analysis_messages: List[AnyMessage]
+    care_makeup_guide_messages: List[AnyMessage]
+    user_profile_creation_messages: List[AnyMessage]
+
 class SkinAnalysisState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
     products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
+    current_flow: Optional[str]
 
     # 中间产物
     current_video_base64: Optional[str]
@@ -202,6 +209,7 @@ class UserProfileEditState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
     products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
+    current_flow: Optional[str]
 
     basic_info: Annotated[Dict[str, Any], dict_merge_reducer]
 
@@ -210,6 +218,7 @@ class CareMakeupGuideState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
     products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
+    current_flow: Optional[str]
 
     plan: Optional[str] # 护肤/化妆计划
 
@@ -218,6 +227,7 @@ class ProductAnalysisState(TypedDict, total=False):
     user_profile: Annotated[UserProfile, dict_merge_reducer]
     products_directory: Annotated[list[Product], list_merge_reducer]
     messages: Annotated[List[AnyMessage], add_messages]
+    current_flow: Optional[str]
 
     # 中间产物
     product_structured_info: Optional[Dict[str, Any]]  # 网络检索到的结构化产品信息

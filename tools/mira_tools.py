@@ -71,12 +71,38 @@ def multimodal_chat_agent(messages, config, streaming=False):
         return result.content.strip()
 
 # 2. 意图识别
-def recognize_intent(content: list, config) -> str:
+def recognize_intent(state: dict, config: dict) -> str:
     """
-    用 LLM 对文本进行意图识别，返回意图类别
+    统一的意图识别函数，根据 state 中的 current_flow 来决定是进行新意图识别还是意图切换判断
+    
+    Args:
+        state (dict): 状态字典，包含：
+            - messages: 消息历史
+            - current_flow: 当前执行的流程（可选）
+        config (dict): 配置信息
+    
+    Returns:
+        str: 如果 state 中没有 current_flow，返回识别出的新意图类别；
+             如果 state 中有 current_flow，返回新的意图类别或"继续"
     """
-    text = [item["text"] for item in content if item["type"] == "text"]
-    prompt = f"""你是一个智能美妆助手的意图识别模块。请判断用户输入的意图属于下列哪一类，只需返回类别本身：
+    current_content = state["messages"][-1].content
+    text = [item["text"] for item in current_content if item["type"] == "text"]
+    current_flow = state.get("current_flow")
+    
+    # 获取上一轮对话内容（如果存在）
+    previous_dialog = ""
+    if len(state["messages"]) > 1:
+        prev_message = state["messages"][-2]
+        if hasattr(prev_message, 'content'):
+            if isinstance(prev_message.content, list):
+                previous_dialog = " ".join([item["text"] for item in prev_message.content if item["type"] == "text"])
+            else:
+                previous_dialog = prev_message.content
+    
+    # 根据是否存在 current_flow 使用不同的 prompt
+    if current_flow is None:
+        # 新意图识别
+        prompt = f"""你是一个智能美妆助手的意图识别模块。请判断用户输入的意图属于下列哪一类，只需返回类别本身：
 
 {INTENT_CATEGORIES}
 
@@ -110,26 +136,9 @@ def recognize_intent(content: list, config) -> str:
 用户输入：{text}
 请直接输出最匹配的类别。
 """
-    llm = ChatOpenAI(
-        openai_api_key=config['configurable'].get("chat_api_key"),
-        openai_api_base=config['configurable'].get("chat_api_base"),
-        model=config['configurable'].get("chat_model_name")
-    )
-    result = llm.invoke([HumanMessage(content=prompt)])
-    # 只返回类别本身
-    intent = result.content.strip()
-    # 容错：如模型输出带标点或解释，做简单清洗
-    for cat in INTENT_CATEGORIES:
-        if cat in intent:
-            return cat
-    return "聊天互动"
-
-def recognize_intent_with_current_flow(content: list, current_flow: str, previous_dialog: str, config) -> str:
-    """
-    用 LLM 根据当前用户输入文本和历史意图，判断是否需要继续当前意图，还是需要切换到其他意图。
-    """
-    text = [item["text"] for item in content if item["type"] == "text"]
-    prompt = f"""你是一个智能美妆助手的意图管理模块。请根据当前用户输入和当前执行的流程，判断是否需要切换到新的意图。可选的意图类别如下：
+    else:
+        # 意图切换判断
+        prompt = f"""你是一个智能美妆助手的意图管理模块。请根据当前用户输入和当前执行的流程，判断是否需要切换到新的意图。可选的意图类别如下：
 
 {INTENT_CATEGORIES}
 
@@ -158,6 +167,7 @@ def recognize_intent_with_current_flow(content: list, current_flow: str, previou
 - 如果需要切换，直接返回新的意图类别
 - 如果应该继续当前流程，直接返回"继续"
 """
+
     llm = ChatOpenAI(
         openai_api_key=config['configurable'].get("chat_api_key"),
         openai_api_base=config['configurable'].get("chat_api_base"),
@@ -165,9 +175,17 @@ def recognize_intent_with_current_flow(content: list, current_flow: str, previou
     )
     result = llm.invoke([HumanMessage(content=prompt)])
     intent = result.content.strip()
-    if intent in INTENT_CATEGORIES:
-        return intent
+    
+    if current_flow is None:
+        # 新意图识别模式：确保返回有效的意图类别
+        for cat in INTENT_CATEGORIES:
+            if cat in intent:
+                return cat
+        return "聊天互动"
     else:
+        # 意图切换判断模式：如果是新意图则返回新意图，否则返回"继续"
+        if intent in INTENT_CATEGORIES:
+            return intent
         return current_flow
 
 

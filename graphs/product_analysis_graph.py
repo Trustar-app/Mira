@@ -3,7 +3,7 @@
 """
 from langchain_openai import ChatOpenAI
 from langchain_tavily import TavilySearch
-from langchain.schema import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langgraph.graph import StateGraph, END, START
 from langgraph.types import interrupt
 from langgraph.prebuilt import ToolNode, InjectedState
@@ -12,9 +12,12 @@ from state import ProductAnalysisState, ConfigState
 from utils.loggers import MiraLog
 from tools.product_analysis_tools import extract_structured_info_from_search
 from tools.common.formatters import format_user_info
-from langchain_core.tools import tool
+from langchain_core.tools import tool, InjectedToolCallId
 from pydantic import BaseModel, Field
 from langchain_core.runnables import RunnableConfig
+from langgraph.types import Command
+from typing_extensions import Annotated
+
 
 class InputCollectionInput(BaseModel):
     query: str = Field(description="你的询问")
@@ -34,26 +37,21 @@ def input_collection_tool(query: str) -> dict:
     return content
 
 @tool("add_product_to_directory", return_direct=True)
-def add_product_to_directory_tool() -> dict:
+def add_product_to_directory_tool(state: Annotated[dict, InjectedState], config: RunnableConfig, tool_call_id: Annotated[str, InjectedToolCallId]) -> dict:
     """
-    用户确认后将产品信息放入目录。
+    将产品信息放入目录。
     """
-    # "是"、"好"、"添加"、"需要"
-    confirm_words = ["是", "好", "添加", "需要", "可以", "ok", "yes", "确定", "同意", "确认", "愿意"]
-    confirm = interrupt({"type": "interrupt", "content": ""})
-    # 如果用户输入的文本中包含 confirm_words 中的任意一个，则认为用户确认
-    if any(word in confirm.get("text", "").lower() for word in confirm_words):
-        return "产品已加入目录"
-    else:
-        return "产品未加入目录"
-
-def extract_structured_info_node(state: ProductAnalysisState, config: RunnableConfig):
     stream_writer = get_stream_writer()
     stream_writer({"type": "progress", "content": "正在抽取产品信息..."})
-    structured_info = extract_structured_info_from_search(state["messages"], config)
-    state["product_structured_info"] = structured_info
+    structured_info = extract_structured_info_from_search(state["messages"][-6:], config)
     stream_writer({"type": "final", "content": {"product": structured_info}})
-    return state
+    return Command(
+        update={
+            "messages": [ToolMessage(content="产品已加入目录", tool_call_id=tool_call_id)],
+            "product_structured_info": structured_info
+        }
+    )
+
 
 class TavilySearchWithConfig(TavilySearch):
     def _run(
@@ -73,7 +71,7 @@ tool_search = TavilySearchWithConfig(
 )
 
 tool_node = ToolNode(
-    tools=[tool_search, input_collection_tool, add_product_to_directory_tool],
+    tools=[tool_search, add_product_to_directory_tool],
     handle_tool_errors=True
 )
 
@@ -108,10 +106,11 @@ def chatbot(state: ProductAnalysisState, config: RunnableConfig):
         "- 评估产品是否适合用户\n"
         "- 提醒潜在的使用注意事项\n\n"
         "【执行步骤】\n"
-        "1. 如果用户没有提供足够信息，调用 query_user_input 工具收集必要信息\n"
-        "2. 使用 tavily_search 工具检索产品相关信息\n"
-        "3. 根据场景提供相应的分析和建议\n"
-        "4. 询问是否将产品加入个人产品目录\n\n"
+        "1. 如果用户没有提供足够信息，请询问用户的需求或需要识别的产品的信息。\n"
+        "2. 获取用户输入后，调用 tavily_search 工具，检索产品的图片、名称、分类、品牌、成分、功效等信息。\n"
+        "3. 在检索到足够的产品信息后，作为语音助手，用温柔的语气向用户简要讲述产品与用户的适配度分析，并询问用户是否需要将该产品加入个人产品目录。\n"
+        "4. 如果用户确认加入，则调用 add_product_to_directory 工具，将产品信息放入目录。\n"
+        "5. 无论用户是否加入，完成后直接结束对话。\n\n"
         "【回复要求】\n"
         "1. 所有回复必须简短、口语化，适合语音播报\n"
         "2. 不要使用分点列举的形式回答\n"
@@ -127,7 +126,7 @@ def chatbot(state: ProductAnalysisState, config: RunnableConfig):
         openai_api_key=config["configurable"].get("chat_api_key"),
         streaming=True
     )
-    llm_with_tools = llm.bind_tools([tool_search, input_collection_tool, add_product_to_directory_tool])
+    llm_with_tools = llm.bind_tools([tool_search, add_product_to_directory_tool])
     messages = [
         SystemMessage(content=system_message),
         *state["messages"]
@@ -164,7 +163,7 @@ def tool_condition(state: ProductAnalysisState):
         return "tools"
     return END
 
-def tool_post_condition(state: ProductAnalysisState):
+def tool_post_node(state: ProductAnalysisState):
     # 获取最近一条 ToolMessage
     messages = state.get("messages", [])
     if not messages:
@@ -201,20 +200,14 @@ def tool_post_condition(state: ProductAnalysisState):
         stream_writer = get_stream_writer()
         stream_writer({"type": "final", "content": {"markdown": content}})
 
-    if hasattr(last_msg, "content"):
-        tool_content = last_msg.content
-    elif isinstance(last_msg, dict) and "content" in last_msg:
-        tool_content = last_msg["content"]
-    if tool_name == "add_product_to_directory" and tool_content == "产品已加入目录":
-        return "extract_structured_info_node"
-    return "chatbot"
+    return state
 
 def build_product_graph():
     graph = StateGraph(ProductAnalysisState, config_schema=ConfigState)
     # 主要节点
     graph.add_node("chatbot", chatbot)    
     graph.add_node("tools", tool_node)
-    graph.add_node("extract_structured_info_node", extract_structured_info_node)
+    graph.add_node("tool_post", tool_post_node)
 
     graph.add_conditional_edges(
         "chatbot",
@@ -224,16 +217,10 @@ def build_product_graph():
             END: END
         }
     )
-    graph.add_conditional_edges(
-        "tools",
-        tool_post_condition,
-        {
-            "extract_structured_info_node": "extract_structured_info_node",
-            "chatbot": "chatbot"
-        }
-    )
-    graph.add_edge("extract_structured_info_node", "chatbot")
+
     graph.add_edge(START, "chatbot")
+    graph.add_edge("tools", "tool_post")
+    graph.add_edge("tool_post", "chatbot")
     return graph.compile()
 
 product_analysis_graph = build_product_graph()

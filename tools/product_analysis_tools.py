@@ -54,7 +54,7 @@ def extract_structured_info_from_search(messages: list, config) -> dict:
         '  "effects": ""\n'
         "}\n"
         "对话内容如下：\n"
-        f"{history_text}"
+        f"```{history_text}```"
     )
     messages = [HumanMessage(content=prompt)]
     llm = ChatOpenAI(
