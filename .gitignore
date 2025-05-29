@@ -3,3 +3,4 @@
 .venv/
 .env
 logs/*
+audio_cache/*.wav
