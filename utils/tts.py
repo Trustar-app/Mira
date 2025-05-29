@@ -10,7 +10,7 @@ from utils.loggers import MiraLog
 
 # 缓存配置
 AUDIO_CACHE_DIR = "audio_cache"
-MAX_CACHE_SIZE_MB = 3  # 最大缓存大小（MB）
+MAX_CACHE_SIZE_MB = 100  # 最大缓存大小（MB）
 MAX_CACHE_AGE_HOURS = 1 # 最大缓存时间（小时）
 CLEANUP_INTERVAL_HOURS = 1  # 清理间隔（小时）
 
