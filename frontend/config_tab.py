@@ -21,7 +21,12 @@ def render_config_tab(app_state):
             chat_api_base = gr.Textbox(label="聊天模型的 Base URL", value=config.get('chat_api_base', ''))
         with gr.Row():
             chat_model_name = gr.Textbox(label="聊天模型的模型名称", value=config.get('chat_model_name', ''))
-            voice_model_name = gr.Textbox(label="语音模型的模型名称", value=config.get('voice_model_name', ''))
+            voice_model_name = gr.Dropdown(
+                label="语音模型的音色名称",
+                choices=["longwan", "longcheng", "longhua", "longxiaochun"],
+                value=config.get('voice_model_name', 'longwan'),
+                info="CosyVoice 模型支持的音色选项"
+            )
         
         # 角色设定
         gr.Markdown("### 👤 角色设定")

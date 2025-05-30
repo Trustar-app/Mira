@@ -162,7 +162,8 @@ def process_user_input(video, text, chat, state):
             # 对 final 消息进行 TTS 处理
             audio_path = None
             if response:
-                audio_path = text_to_speech(response, voice="Cherry", save_dir="audio_cache")
+                config = state.value['config'] if hasattr(state, 'value') else state['config']
+                audio_path = text_to_speech(response, voice=config.get('voice_model_name', 'longwan'), save_dir="audio_cache")
             
             yield chat, markdown, state, None, "", audio_path, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
@@ -191,7 +192,8 @@ def new_chat(state):
                     response = chunk['content']['response']
                     chat = combine_msg(chat, {"content": response, "type": "final"})
                     # 对欢迎语进行 TTS 处理
-                    audio_path = text_to_speech(response, voice="Cherry", save_dir="audio_cache") if response else None
+                    config = state.value['config'] if hasattr(state, 'value') else state['config']
+                    audio_path = text_to_speech(response, voice=config.get('voice_model_name', 'longwan'), save_dir="audio_cache") if response else None
                     yield chat, "", state, None, "", audio_path, *extract_profile_values(state['profile']), *extract_products_values(state['products']), *extract_config_values(state['config'])
 
 def build_demo():

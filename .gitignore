@@ -4,3 +4,4 @@
 .env
 logs/*
 audio_cache/*.wav
+audio_cache/*.mp3
