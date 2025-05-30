@@ -213,7 +213,7 @@ def text_to_speech(text: str, voice: str = "longwan", save_dir: str = AUDIO_CACH
                 f.write(response.content)
             
         elif model == "cosyvoice-v1":
-            dashscope.api_key = os.getenv("TTS_API_KEY")
+            dashscope.api_key = api_key
             model = "cosyvoice-v1"
             if voice not in ["longwan", "longcheng", "longhua", "longxiaochun", "longxiaochun"]:
                 voice = "longwan"

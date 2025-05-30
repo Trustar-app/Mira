@@ -134,7 +134,7 @@ def default_config_state():
         "chat_api_key": "default",
         "chat_api_base": os.getenv("CHAT_API_BASE", ""),
         "chat_model_name": os.getenv("CHAT_MODEL_NAME", ""),
-        "audio_model_name": "Cherry",
+        "audio_model_name": "longwan",
         "chat_style": os.getenv("CHAT_STYLE", ""),
         "character_setting": default_character_setting(),
         "tavily_api_key": "default",

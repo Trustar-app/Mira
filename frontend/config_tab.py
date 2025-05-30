@@ -24,7 +24,7 @@ def render_config_tab(app_state):
             voice_model_name = gr.Dropdown(
                 label="语音音色",
                 choices=["longwan", "longcheng", "longhua", "longxiaochun"],
-                value=config.get('audio_model_name', 'Cherry')
+                value=config.get('audio_model_name', 'longwan')
             )
         
         # 角色设定
