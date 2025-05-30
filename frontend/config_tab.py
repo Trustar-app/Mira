@@ -23,7 +23,7 @@ def render_config_tab(app_state):
             chat_model_name = gr.Textbox(label="聊天模型的模型名称", value=config.get('chat_model_name', ''))
             voice_model_name = gr.Dropdown(
                 label="语音音色",
-                choices=["Cherry", "Serena", "Ethan", "Chelsie"],
+                choices=["longwan", "longcheng", "longhua", "longxiaochun"],
                 value=config.get('audio_model_name', 'Cherry')
             )
         

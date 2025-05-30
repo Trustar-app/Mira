@@ -1,6 +1,7 @@
 import os
 import requests
 import dashscope
+from dashscope.audio.tts_v2 import *
 from pathlib import Path
 import time
 import shutil
@@ -155,13 +156,13 @@ def _clean_text_for_tts(text: str) -> str:
     
     return text.strip()
 
-def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE_DIR, api_key: str = None) -> str:
+def text_to_speech(text: str, voice: str = "longwan", save_dir: str = AUDIO_CACHE_DIR, api_key: str = None, model: str = "cosyvoice-v1") -> str:
     """
     将文本转换为语音并保存为音频文件
     
     Args:
         text: 要转换的文本
-        voice: 语音类型，默认使用 "Cherry"
+        voice: 语音类型，默认使用 "longwan"
         save_dir: 音频文件保存目录，默认为 AUDIO_CACHE_DIR
         api_key: API key，如果不提供则使用环境变量中的 TTS_API_KEY
     
@@ -183,29 +184,44 @@ def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE
         
         # 生成唯一的文件名
         import hashlib
-        filename = f"{hashlib.md5(f'{cleaned_text}_{time.time()}'.encode()).hexdigest()}.wav"
+        if model == "qwen-tts":
+            filename = f"{hashlib.md5(f'{text}_{time.time()}'.encode()).hexdigest()}.wav"
+        elif model == "cosyvoice-v1":
+            filename = f"{hashlib.md5(f'{text}_{time.time()}'.encode()).hexdigest()}.mp3"
         save_path = os.path.join(save_dir, filename)
         
-        # 调用 TTS API
-        response = dashscope.audio.qwen_tts.SpeechSynthesizer.call(
-            model="qwen-tts",
-            api_key=api_key,
-            text=cleaned_text,
-            voice=voice,
-        )
-        
-        if not response or not response.output or not response.output.audio:
-            MiraLog("tts", "TTS API 返回结果异常", "ERROR")
-            return None
+        if model == "qwen-tts":
+            # 调用 TTS API
+            response = dashscope.audio.qwen_tts.SpeechSynthesizer.call(
+                model="qwen-tts",
+                api_key=api_key,
+                text=cleaned_text,
+                voice=voice,
+            )
             
-        audio_url = response.output.audio["url"]
-        
-        # 下载音频文件
-        response = requests.get(audio_url)
-        response.raise_for_status()
-        
-        with open(save_path, 'wb') as f:
-            f.write(response.content)
+            if not response or not response.output or not response.output.audio:
+                MiraLog("tts", "TTS API 返回结果异常", "ERROR")
+                return None
+                
+            audio_url = response.output.audio["url"]
+            
+            # 下载音频文件
+            response = requests.get(audio_url)
+            response.raise_for_status()
+            
+            with open(save_path, 'wb') as f:
+                f.write(response.content)
+            
+        elif model == "cosyvoice-v1":
+            dashscope.api_key = os.getenv("TTS_API_KEY")
+            model = "cosyvoice-v1"
+            if voice not in ["longwan", "longcheng", "longhua", "longxiaochun", "longxiaochun"]:
+                voice = "longwan"
+            synthesizer = SpeechSynthesizer(model=model, voice=voice)
+            audio = synthesizer.call(text)
+            print('requestId: ', synthesizer.get_last_request_id())
+            with open(save_path, 'wb') as f:
+                f.write(audio)
             
         MiraLog("tts", f"音频文件已保存至：{save_path}")
         return save_path
