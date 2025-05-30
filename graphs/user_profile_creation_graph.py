@@ -70,7 +70,6 @@ def face_feature_analysis_node(state: UserProfileEditState, config: RunnableConf
         "【肤质标签】\n"
         + (''.join([f"  - {item}\n" for item in skin_type]) if skin_type else "  - 未识别\n")
     )
-    writer({"type": "final", "content": {"response": feature_str}})
 
     # 更新 State
     return {

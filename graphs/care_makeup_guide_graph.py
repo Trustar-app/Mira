@@ -84,6 +84,7 @@ def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
     character_setting = config["configurable"].get("character_setting", {})
     
     # 构建系统 prompt
+    formatted_info = format_user_info(state.get("user_profile", {}), state.get("products_directory", []))
     system_prompt = (
         f"你是 {character_setting['name']}，一个专业的美妆顾问和心理陪伴师。\n\n"
         f"【角色设定】\n"
@@ -112,8 +113,10 @@ def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
         "每次只能调用一个工具。\n"
         "以下是当前计划(如果还未生成计划，请忽略)：\n"
         "{plan}\n"
+        f"{formatted_info}\n"
     ).format(
-        plan=state.get("plan", "无")
+        plan=state.get("plan", "无"),
+        formatted_info=formatted_info
     )
     messages = [SystemMessage(content=system_prompt), *state.get("messages", [])]
     stream_writer({"type": "progress", "content": "正在分析..."})

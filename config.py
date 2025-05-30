@@ -10,7 +10,6 @@ MIRA_GREETING_PROMPT = """
 ## 用户产品目录
 {products_directory}
 
-
 ## 日常信息
 当前时间：{current_time}
 季节：{season}

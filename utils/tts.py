@@ -4,6 +4,7 @@ import dashscope
 from pathlib import Path
 import time
 import shutil
+import re
 from datetime import datetime, timedelta
 
 from utils.loggers import MiraLog
@@ -124,6 +125,36 @@ def _ensure_cache_cleanup():
     except Exception as e:
         MiraLog("tts", f"检查缓存状态时出错：{str(e)}")
 
+def _clean_text_for_tts(text: str) -> str:
+    """
+    清理文本中的特殊标记，使其适合TTS转换
+    
+    Args:
+        text: 原始文本
+    
+    Returns:
+        str: 清理后的文本
+    """
+    # 移除 markdown 图片链接 ![alt](url)
+    text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
+    
+    # 移除普通URL链接
+    text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+    
+    # 移除 markdown 链接 [text](url)
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    
+    # 移除表情符号 (Unicode ranges for most emojis)
+    text = re.sub(r'[\U0001F300-\U0001F9FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF]', '', text)
+    
+    # 移除 HTML 标签
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # 移除多余的空白字符
+    text = re.sub(r'\s+', ' ', text)
+    
+    return text.strip()
+
 def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE_DIR, api_key: str = None) -> str:
     """
     将文本转换为语音并保存为音频文件
@@ -138,6 +169,12 @@ def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE
         str: 保存的音频文件路径，如果失败则返回 None
     """
     try:
+        # 清理文本
+        cleaned_text = _clean_text_for_tts(text)
+        if not cleaned_text:
+            MiraLog("tts", "清理后的文本为空", "WARNING")
+            return None
+            
         # 确保缓存目录存在
         Path(save_dir).mkdir(parents=True, exist_ok=True)
         
@@ -146,14 +183,14 @@ def text_to_speech(text: str, voice: str = "Cherry", save_dir: str = AUDIO_CACHE
         
         # 生成唯一的文件名
         import hashlib
-        filename = f"{hashlib.md5(f'{text}_{time.time()}'.encode()).hexdigest()}.wav"
+        filename = f"{hashlib.md5(f'{cleaned_text}_{time.time()}'.encode()).hexdigest()}.wav"
         save_path = os.path.join(save_dir, filename)
         
         # 调用 TTS API
         response = dashscope.audio.qwen_tts.SpeechSynthesizer.call(
             model="qwen-tts",
             api_key=api_key,
-            text=text,
+            text=cleaned_text,
             voice=voice,
         )
         
