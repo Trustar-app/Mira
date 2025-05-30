@@ -25,6 +25,7 @@ git clone https://www.modelscope.cn/studios/Nanshine/Mira.git
 ```bash
 pip install -r requirements.txt
 ```
+将.env.sample 重命名为.env 文件，填入 API KEY
 
 3. 运行应用
 ```bash
