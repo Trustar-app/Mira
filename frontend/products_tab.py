@@ -87,7 +87,7 @@ def render_products_tab(app_state):
     with gr.Column():
         with gr.Accordion("💄 这里收藏了你的美妆产品：", open=False):
             gr.Markdown("""
-            * 在聊天时询问或请求推荐产品，Mira 会询问是否添加为产品卡片
+            * 在Mira分析产品或者推荐产品后，可以请求 Mira 将产品添加到产品卡片集
             * 也可以在这里手动管理产品
                         
             💡 Mira 会根据你的产品给出更好的建议哦~
