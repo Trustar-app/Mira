@@ -39,7 +39,7 @@ def extract_structured_info_from_search(messages: list, config) -> dict:
         "请根据以下用户与AI的对话内容，提取产品的结构化信息，输出标准 JSON，字段内容为中文。\n"
         "需要提取的字段如下：\n"
         "  - 产品图片（image_url）\n"
-        "  - 产品名称（name）\n"
+        "  - 产品名称（product_name）\n"
         "  - 产品分类（category）\n"
         "  - 产品品牌（brand）\n"
         "  - 产品成分（ingredients）\n"
@@ -47,7 +47,7 @@ def extract_structured_info_from_search(messages: list, config) -> dict:
         "请严格按照如下 JSON 格式输出：\n"
         "{\n"
         '  "image_url": "",\n'
-        '  "name": "",\n'
+        '  "product_name": "",\n'
         '  "category": "",\n'
         '  "brand": "",\n'
         '  "ingredients": "",\n'

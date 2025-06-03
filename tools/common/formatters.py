@@ -177,7 +177,7 @@ def en_to_cn(key):
         "user_preferences": "个人诉求与偏好",
 
         "image_url": "产品图片",
-        "name": "产品名称",
+        "product_name": "产品名称",
         "category": "产品分类",
         "brand": "产品品牌",
         "ingredients": "成分",

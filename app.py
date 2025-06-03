@@ -34,12 +34,12 @@ def get_current_time_and_season():
     return current_time, current_season
 
 def generate_greeting_prompt(app_state):
-    current_time, season = get_current_time_and_season()
+    # current_time, season = get_current_time_and_season()
     user_profile = app_state['profile']
     products_directory = app_state['products']
     greeting_prompt = MIRA_GREETING_PROMPT.format(
-        current_time=current_time,
-        season=season,
+        # current_time=current_time,
+        # season=season,
         user_profile=user_profile,
         products_directory=products_directory
     )
@@ -94,7 +94,7 @@ def extract_config_values(config):
         config.get('chat_api_key', ''),
         config.get('chat_api_base', ''),
         config.get('chat_model_name', ''),
-        config.get('voice_model_name', ''),
+        config.get('audio_model_name', ''),
         config.get('character_setting', {}).get('name', ''),
         config.get('character_setting', {}).get('personality', ''),
         config.get('character_setting', {}).get('background', ''),
@@ -208,10 +208,10 @@ def build_demo():
         with gr.Accordion("👋 欢迎来到 Mira！我是一面智能镜子，也是你的私人美妆助理和美丽顾问。", open=False):
             gr.Markdown("""
             我可以：
-            * 🔍 **产品分析** - "这个护肤品怎么样？" 或 "推荐适合我的粉底液"
-            * 💄 **肤质检测** - "帮我检测下皮肤状况" 或 "我的皮肤有什么问题"
-            * 👩‍🏫 **美妆指导** - "教我画一个约会妆" 或 "教我护肤"
             * 📝 **个人档案** - "我想创建我的档案" 或 "更新我的档案"
+            * 💄 **肤质检测** - "帮我检测下皮肤状况" 或 "我的皮肤有什么问题"
+            * 🔍 **产品分析** - "欧莱雅男士淡纹霜怎么样" 或 "推荐适合我的粉底液"
+            * 👩‍🏫 **美妆指导** - "教我画一个约会妆" 或 "教我护肤"
             
             这个demo旨在模拟你与智能镜子的互动体验~
             """, elem_classes="compact-markdown")
@@ -225,6 +225,7 @@ def build_demo():
                         * 可以通过视频录制来展示和询问
                         * 也可以直接输入文字交流
                         """, elem_classes="compact-markdown")
+                    gr.Markdown("⚠️ **注意**：视频对话需要较强的 CPU 处理能力，响应时间较长，建议优先使用文字对话。", elem_classes="compact-markdown")
                     video_in = gr.Video(sources=["webcam"], include_audio=True, label="视频对话（含音频）")
                     text_in = gr.Textbox(label="文字对话", lines=2, placeholder="请输入你的问题或需求…")
                     submit_btn = gr.Button("提交", elem_id="submit-btn")
@@ -241,6 +242,7 @@ def build_demo():
                     greeting_prompt = generate_greeting_prompt(app_state.value)
                     app_state.value['config']['greeting_prompt'] = greeting_prompt
                     greeting_response = mira_graph.invoke({"messages": format_messages(None, greeting_prompt)}, {"configurable": fill_config_with_env(app_state.value['config'])}, stream_mode=["custom"])
+                    print("重新生成欢迎语")
                     response = ""
                     for mode, chunk in greeting_response:
                         if mode == "custom" and chunk['type'] == "final":
