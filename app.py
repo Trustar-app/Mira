@@ -83,7 +83,7 @@ def extract_profile_values(profile):
 
 def extract_products_values(products):
     from frontend.products_tab import render_products_collection
-    choices = [(p['name'], i) for i, p in enumerate(products)]
+    choices = [(p['product_name'], i) for i, p in enumerate(products)]
     return [
         render_products_collection(products),
         gr.update(choices=choices, value=None)

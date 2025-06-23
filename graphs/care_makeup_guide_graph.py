@@ -123,7 +123,7 @@ def chatbot(state: CareMakeupGuideState, config: RunnableConfig):
     content_buffer = ""
     first_chunk = True
     llm = ChatOpenAI(
-        model=config["configurable"].get("chat_model_name"),
+        model="qwen-plus-latest",
         openai_api_base=config["configurable"].get("chat_api_base"),
         openai_api_key=config["configurable"].get("chat_api_key"),
         streaming=True
